@@ -128,3 +128,17 @@ d('PDF bleed / trim', () => {
     expect(px(110, 60)).toEqual([255, 0, 0]);
   });
 });
+
+d('PDF blend modes', () => {
+  it('multiply and screen render in poppler as in the canvas renderer; live effects are not present (and are warned about elsewhere)', () => {
+    const doc = createDocument('d', 200, 100);
+    addElement(doc, createRect(0, 0, 200, 100, { fill: solid('#ffff00'), stroke: null }));
+    addElement(doc, createRect(20, 20, 60, 60, { fill: solid('#ff0000'), stroke: null, blend: 'multiply' }));
+    addElement(doc, createRect(120, 20, 60, 60, { fill: solid('#0000ff'), stroke: null, blend: 'screen' }));
+    const { pdf, diff } = compare(doc);
+    const px = (x: number, y: number) => [...pdf.data.slice((pdf.width * y + x) * 4, (pdf.width * y + x) * 4 + 3)];
+    expect(px(50, 50)).toEqual([255, 0, 0]);          // yellow × red
+    expect(px(150, 50)).toEqual([255, 255, 255]);     // yellow ⊕ blue = white
+    expect(diff).toBeLessThan(0.01);
+  });
+});

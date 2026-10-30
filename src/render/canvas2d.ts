@@ -98,9 +98,46 @@ function unitGradient(ctx: CanvasRenderingContext2D, g: GradientPaint): CanvasGr
   return grad;
 }
 
+const hasEffects = (el: Element) => !!el.effects && el.effects.length > 0;
+const hasBlend = (el: Element) => !!el.blend && el.blend !== 'normal';
+
 function needsCompositing(el: Element): boolean {
+  if (hasEffects(el) || hasBlend(el)) return true;
   if (el.opacity >= 1) return false;
   return el.type === 'group' || (!!el.fill && !!el.stroke);
+}
+
+/** Device-space scale of the current transform (used to turn document-unit radii into pixels). */
+function deviceScale(ctx: CanvasRenderingContext2D): number {
+  const m = ctx.getTransform();
+  return Math.sqrt(Math.abs(m.a * m.d - m.b * m.c)) || 1;
+}
+
+/**
+ * Draws a rendered layer with the element's blend mode and live effects. Shadows/glows are drawn first (behind), using the
+ * trick of drawing the layer off-canvas and offsetting only its shadow, so the object itself is not drawn twice.
+ */
+function compositeLayer(ctx: CanvasRenderingContext2D, layer: CanvasImageSource, el: Element, scale: number, width: number): void {
+  const op = (hasBlend(el) ? el.blend : 'source-over') as GlobalCompositeOperation;
+  ctx.globalCompositeOperation = op;
+  const far = width + 200;
+  for (const fx of el.effects ?? []) {
+    if (fx.type !== 'dropShadow' && fx.type !== 'outerGlow') continue;
+    const hexc = fx.color;
+    const r = parseInt(hexc.slice(1, 3), 16), g = parseInt(hexc.slice(3, 5), 16), b = parseInt(hexc.slice(5, 7), 16);
+    ctx.save();
+    ctx.shadowColor = `rgba(${r},${g},${b},${fx.alpha})`;
+    ctx.shadowBlur = fx.blur * scale;
+    ctx.shadowOffsetX = far + (fx.type === 'dropShadow' ? fx.dx * scale : 0);
+    ctx.shadowOffsetY = fx.type === 'dropShadow' ? fx.dy * scale : 0;
+    ctx.drawImage(layer, -far, 0);
+    ctx.restore();
+  }
+  const blur = (el.effects ?? []).find((f) => f.type === 'blur');
+  if (blur && blur.type === 'blur' && blur.radius > 0) ctx.filter = `blur(${blur.radius * scale}px)`;
+  ctx.drawImage(layer, 0, 0);
+  ctx.filter = 'none';
+  ctx.globalCompositeOperation = 'source-over';
 }
 
 function drawElement(ctx: CanvasRenderingContext2D, el: Element, opts: RenderOptions & { skipId?: string }, world: Matrix6): void {
@@ -118,9 +155,10 @@ function drawElement(ctx: CanvasRenderingContext2D, el: Element, opts: RenderOpt
     off.ctx.setTransform(ctx.getTransform());
     off.ctx.transform(t[0], t[1], t[2], t[3], t[4], t[5]);
     drawBody(off.ctx, el, opts, m);
+    const scale = deviceScale(ctx);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha *= el.opacity;
-    ctx.drawImage(off.canvas as unknown as CanvasImageSource, 0, 0);
+    compositeLayer(ctx, off.canvas as unknown as CanvasImageSource, el, scale, ctx.canvas.width);
   } else {
     ctx.transform(t[0], t[1], t[2], t[3], t[4], t[5]);
     if (el.opacity < 1) ctx.globalAlpha *= el.opacity;

@@ -34,8 +34,35 @@ function strokeAttrs(st: Stroke | null): string {
   return s;
 }
 
+const BLEND_CSS = (b?: string) => (b && b !== 'normal' ? b : null);
+
+/** SVG filter chain equal to the editor's effect stack: shadows/glows behind, optional blur on the object. */
+function effectsFilter(el: Element): string | null {
+  const fx = el.effects ?? [];
+  if (!fx.length) return null;
+  const id = `fx-${defs.length + 1}`;
+  let body = '';
+  const merge: string[] = [];
+  fx.forEach((f, i) => {
+    if (f.type === 'blur') return;
+    const dx = f.type === 'dropShadow' ? f.dx : 0, dy = f.type === 'dropShadow' ? f.dy : 0;
+    body += `<feGaussianBlur in="SourceAlpha" stdDeviation="${n(f.blur / 2)}"/><feOffset dx="${n(dx)}" dy="${n(dy)}" result="o${i}"/><feFlood flood-color="${f.color}" flood-opacity="${n(f.alpha)}"/><feComposite in2="o${i}" operator="in" result="s${i}"/>`;
+    merge.push(`s${i}`);
+  });
+  const blur = fx.find((f) => f.type === 'blur');
+  let src = 'SourceGraphic';
+  if (blur && blur.type === 'blur' && blur.radius > 0) { body += `<feGaussianBlur in="SourceGraphic" stdDeviation="${n(blur.radius)}" result="body"/>`; src = 'body'; }
+  body += `<feMerge>${merge.map((m) => `<feMergeNode in="${m}"/>`).join('')}<feMergeNode in="${src}"/></feMerge>`;
+  defs.push(`<filter id="${id}" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">${body}</filter>`);
+  return id;
+}
+
 function common(el: Element): string {
   let s = ` id="${esc(el.id)}"`;
+  const fid = effectsFilter(el);
+  if (fid) s += ` filter="url(#${fid})"`;
+  const bl = BLEND_CSS(el.blend);
+  if (bl) s += ` style="mix-blend-mode:${bl}"`;
   if (el.name) s += ` data-name="${esc(el.name)}"`;
   if (!isIdentity(el.transform)) s += ` transform="matrix(${el.transform.map(n).join(' ')})"`;
   if (el.opacity < 1) s += ` opacity="${n(el.opacity)}"`;

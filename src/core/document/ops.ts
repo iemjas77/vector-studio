@@ -4,7 +4,7 @@ import { newId } from './ids';
 import { createArtboard, createGroup, createLayer, createPath } from './factory';
 import { locate, parentMatrix, worldMatrix } from './query';
 import { cloneWithNewIds, elementSubpaths, toPathElement } from './shape';
-import type { Artboard, Element, Layer, Paint, PathElement, ShapeElement, Stroke, VDocument } from './types';
+import type { Artboard, BlendMode, Effect, Element, Layer, Paint, PathElement, ShapeElement, Stroke, VDocument } from './types';
 
 /**
  * Document commands. Every command mutates an immer draft; wrap with History.apply to
@@ -27,6 +27,7 @@ export function removeElements(doc: VDocument, ids: readonly string[]): void {
 
 export type ElementPatch = Partial<{
   name: string; visible: boolean; locked: boolean; opacity: number; fill: Paint | null; stroke: Stroke | null;
+  blend: BlendMode | undefined; effects: Effect[] | undefined;
 }>;
 
 export function patchElements(doc: VDocument, ids: readonly string[], patch: ElementPatch): void {
@@ -38,6 +39,8 @@ export function patchElements(doc: VDocument, ids: readonly string[], patch: Ele
     if (patch.visible !== undefined) el.visible = patch.visible;
     if (patch.locked !== undefined) el.locked = patch.locked;
     if (patch.opacity !== undefined) el.opacity = Math.min(1, Math.max(0, patch.opacity));
+    if ('blend' in patch) { if (patch.blend && patch.blend !== 'normal') el.blend = patch.blend; else delete el.blend; }
+    if ('effects' in patch) { if (patch.effects && patch.effects.length) el.effects = patch.effects.map((e) => ({ ...e })); else delete el.effects; }
     if (el.type !== 'group') {
       if (patch.fill !== undefined) el.fill = patch.fill;
       if (patch.stroke !== undefined) el.stroke = patch.stroke;

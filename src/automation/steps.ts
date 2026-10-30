@@ -4,6 +4,7 @@ import {
   cleanupDocument, DEFAULT_CLEANUP, reduceColors, replaceColor, resizeArtboardWithContent, solid, type Artboard, type CleanupOptions, type VDocument,
 } from '../core/document';
 import { exportPdf, exportSvg, setJpegPpi, setPngPpi } from '../core/io';
+import { BLEND_MODES } from '../core/document';
 
 /**
  * Recordable steps. Each step is a SEMANTIC document command (never mouse coordinates). The UI performs these through
@@ -26,6 +27,11 @@ export interface StepContext {
 const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 const mode = z.enum(['left', 'hcenter', 'right', 'top', 'vcenter', 'bottom']);
 const dmode = z.enum(['hcenters', 'vcenters', 'hspace', 'vspace']);
+const effectSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('blur'), radius: z.number().min(0).max(1000) }),
+  z.object({ type: z.literal('dropShadow'), dx: z.number(), dy: z.number(), blur: z.number().min(0).max(1000), color: hex, alpha: z.number().min(0).max(1) }),
+  z.object({ type: z.literal('outerGlow'), blur: z.number().min(0).max(1000), color: hex, alpha: z.number().min(0).max(1) }),
+]);
 const types = z.array(z.enum(['rect', 'ellipse', 'path', 'text', 'group']));
 
 export interface StepDef<P = unknown> {
@@ -76,6 +82,9 @@ export const STEPS: StepDef<any>[] = [ // eslint-disable-line @typescript-eslint
   def({ type: 'reflect', label: 'Reflect', schema: z.object({ axis: z.enum(['horizontal', 'vertical']) }), needsSelection: true, run: (c, p) => { needSel(c, 'Reflect'); c.editor.reflectSelection(p.axis); } }),
   def({ type: 'scaleXY', label: 'Scale non-uniform (%)', schema: z.object({ x: z.number().min(0.1).max(10000), y: z.number().min(0.1).max(10000) }), needsSelection: true, run: (c, p) => { needSel(c, 'Scale'); c.editor.scaleSelectionXY(p.x, p.y); } }),
   def({ type: 'transformEach', label: 'Transform Each', schema: z.object({ scale: z.number().min(0.1).max(10000).optional(), rotate: z.number().min(-360).max(360).optional(), moveX: z.number().optional(), moveY: z.number().optional() }), needsSelection: true, run: (c, p) => { needSel(c, 'Transform Each'); c.editor.transformEach(p); } }),
+  def({ type: 'setBlend', label: 'Set blend mode', schema: z.object({ mode: z.enum(BLEND_MODES) }), needsSelection: true, run: (c, p) => { needSel(c, 'Blend mode'); c.editor.setBlend(p.mode); } }),
+  def({ type: 'addEffect', label: 'Add live effect', schema: z.object({ effect: effectSchema }), needsSelection: true, run: (c, p) => { needSel(c, 'Add effect'); c.editor.addEffect(p.effect); } }),
+  def({ type: 'clearEffects', label: 'Clear live effects', schema: z.object({}), needsSelection: true, run: (c) => { needSel(c, 'Clear effects'); c.editor.clearEffects(); } }),
   def({ type: 'setFill', label: 'Set fill colour', schema: z.object({ color: hex.nullable(), alpha: z.number().min(0).max(1).default(1) }), needsSelection: true, run: (c, p) => { needSel(c, 'Set fill'); c.editor.setFill(p.color ? solid(p.color, p.alpha) : null); } }),
   def({ type: 'setStroke', label: 'Set stroke', schema: z.object({ color: hex.optional(), width: z.number().min(0).max(1000).optional(), none: z.boolean().optional() }), needsSelection: true, run: (c, p) => { needSel(c, 'Set stroke'); if (p.none) c.editor.updateStroke(null); else c.editor.updateStroke({ ...(p.color ? { paint: solid(p.color) } : {}), ...(p.width !== undefined ? { width: p.width } : {}) }); } }),
   def({ type: 'replaceColor', label: 'Change colour', schema: z.object({ from: hex, to: hex }), run: (c, p) => { c.editor.apply('Replace color', (d) => { replaceColor(d, p.from, p.to); }); } }),
@@ -125,7 +134,7 @@ export function rasterToBytes(bytes: Uint8Array, format: 'png' | 'jpeg', ppi: nu
 export const STEP_TEMPLATES: Record<string, Record<string, unknown>> = {
   selectAll: {}, deselect: {}, selectByType: { types: ['text'] }, group: {}, ungroup: {}, makeCompound: {}, releaseCompound: {}, makeClip: {}, releaseClip: {},
   align: { mode: 'hcenter', toArtboard: true }, distribute: { mode: 'hspace' }, boolean: { op: 'unite' }, expandStroke: {}, offsetPath: { distance: 5, join: 'round' },
-  createOutlines: {}, scaleSelection: { percent: 50 }, rotate: { degrees: 90 }, shear: { degrees: 20 }, reflect: { axis: 'horizontal' }, scaleXY: { x: 100, y: 50 }, transformEach: { scale: 80, rotate: 15 }, setFill: { color: '#000000', alpha: 1 }, setStroke: { color: '#000000', width: 2 },
+  createOutlines: {}, scaleSelection: { percent: 50 }, setBlend: { mode: 'multiply' }, addEffect: { effect: { type: 'dropShadow', dx: 6, dy: 6, blur: 10, color: '#000000', alpha: 0.5 } }, clearEffects: {}, rotate: { degrees: 90 }, shear: { degrees: 20 }, reflect: { axis: 'horizontal' }, scaleXY: { x: 100, y: 50 }, transformEach: { scale: 80, rotate: 15 }, setFill: { color: '#000000', alpha: 1 }, setStroke: { color: '#000000', width: 2 },
   replaceColor: { from: '#ff0000', to: '#0000ff' }, reduceColors: { max: 6 }, cleanup: {}, resizeArtboard: { width: 4500, height: 5400, mode: 'fit' },
   setBackground: { color: null }, renameLayers: { pattern: 'Layer {n}' }, exportRaster: { format: 'png', width: 4500, transparent: true, quality: 0.92 },
   exportSvg: {}, exportPdf: {}, saveCopy: { suffix: '-copy' }, prompt: { message: 'Check the artwork, then continue' }, stop: {},

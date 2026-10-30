@@ -14,6 +14,7 @@ import { ColorPanel } from './panels/Color';
 import { StrokePanel } from './panels/Stroke';
 import { LayersPanel } from './panels/Layers';
 import { AlignPanel } from './panels/Align';
+import { AppearancePanel, TransparencyPanel } from './panels/Appearance';
 import { DocumentInfoPanel, PathfinderPanel, TransformPanel } from './panels/Panels2';
 import { ActionsPanel } from './panels/Actions';
 import { actions } from './actions-service';
@@ -31,6 +32,8 @@ if (!listPlugins().some((p) => p.id === podToolsPlugin.id)) registerPlugin(podTo
 
 const PANELS = [
   { id: 'properties', title: 'Properties', el: <PropertiesPanel /> },
+  { id: 'appearance', title: 'Appearance', el: <AppearancePanel /> },
+  { id: 'transparency', title: 'Transparency', el: <TransparencyPanel /> },
   { id: 'color', title: 'Color', el: <ColorPanel /> },
   { id: 'stroke', title: 'Stroke', el: <StrokePanel /> },
   { id: 'typography', title: 'Typography', el: <TypographyPanel /> },

@@ -2,7 +2,7 @@ import {
   History, addElement, addArtboard, addLayer, convertToPath, createDocument, defaultStroke, duplicateElements, elementBounds, elementNodes,
   elementsInRect, getElement, groupElements, hitTest, insertCopies, locate, moveLayer, parentMatrix, patchArtboard, patchElements, patchLayer,
   removeArtboard, removeElements, removeLayer, reorder, selectionBounds, setPathNodes, solid, transformWorld, ungroupElements, worldMatrix,
-  expandStroke, offsetPath, allElementIds, moveElement, worldBounds, insertCopiesRelative, solidOf, hitTestChildren, childrenInRect, addGuide, moveGuide, removeGuide, clearGuides, booleanOperation, makeCompoundPath, releaseCompoundPaths, type BooleanOp,
+  expandStroke, offsetPath, allElementIds, moveElement, worldBounds, type BlendMode, type Effect, insertCopiesRelative, solidOf, hitTestChildren, childrenInRect, addGuide, moveGuide, removeGuide, clearGuides, booleanOperation, makeCompoundPath, releaseCompoundPaths, type BooleanOp,
   patchText, textOnPath, releaseTextPath, type TextPatch,
   alignElements, distributeElements, makeClippingMask, releaseClippingMask, type AlignMode, type DistributeMode,
   type Artboard, type Element, type Paint, type PathElement, type Stroke, type VDocument, type ZOrder,
@@ -608,6 +608,31 @@ export class Editor {
       }
     });
   }
+  // ---- transparency & live effects ----
+  setBlend(mode: BlendMode): void {
+    const ids = [...this.selection];
+    if (ids.length) this.apply('Blend mode', (d) => patchElements(d, ids, { blend: mode }));
+  }
+  private effectsOfFirst(): Effect[] { return [...(this.selectedElements[0]?.effects ?? [])]; }
+  /** Append an effect to every selected object. */
+  addEffect(fx: Effect): void {
+    const ids = [...this.selection];
+    if (ids.length) this.apply('Add effect', (d) => { for (const id of ids) { const e = getElement(d, id); patchElements(d, [id], { effects: [...(e?.effects ?? []), fx] }); } });
+  }
+  /** Replace the i-th effect (taken from the first selected object's stack) on all selected objects. */
+  updateEffect(index: number, fx: Effect): void {
+    const ids = [...this.selection];
+    if (ids.length && index >= 0 && index < this.effectsOfFirst().length) this.apply('Edit effect', (d) => { for (const id of ids) { const e = getElement(d, id); if (e?.effects?.[index]) { const list = [...e.effects]; list[index] = fx; patchElements(d, [id], { effects: list }); } } });
+  }
+  removeEffect(index: number): void {
+    const ids = [...this.selection];
+    if (ids.length) this.apply('Remove effect', (d) => { for (const id of ids) { const e = getElement(d, id); if (e?.effects) patchElements(d, [id], { effects: e.effects.filter((_, i) => i !== index) }); } });
+  }
+  clearEffects(): void {
+    const ids = [...this.selection];
+    if (ids.length) this.apply('Clear effects', (d) => patchElements(d, ids, { effects: undefined }));
+  }
+
   /** Rename all layers with a pattern: {n} = number (bottom layer is 1), {name} = old name. */
   renameLayers(pattern: string): void {
     this.apply('Rename layers', (d) => d.layers.forEach((l, i) => { l.name = pattern.replace(/\{n\}/g, String(i + 1)).replace(/\{name\}/g, l.name); }));

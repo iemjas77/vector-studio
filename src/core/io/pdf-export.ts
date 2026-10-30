@@ -22,8 +22,13 @@ interface Ctx {
   shadings: string[];
 }
 
-function gsName(ctx: Ctx, ca: number, CA: number): string {
-  const key = `${f(ca)}/${f(CA)}`;
+const PDF_BLEND: Record<string, string> = {
+  multiply: 'Multiply', screen: 'Screen', overlay: 'Overlay', darken: 'Darken', lighten: 'Lighten', 'color-dodge': 'ColorDodge', 'color-burn': 'ColorBurn',
+  'hard-light': 'HardLight', 'soft-light': 'SoftLight', difference: 'Difference', exclusion: 'Exclusion', hue: 'Hue', saturation: 'Saturation', color: 'Color', luminosity: 'Luminosity',
+};
+
+function gsName(ctx: Ctx, ca: number, CA: number, bm = 'Normal'): string {
+  const key = `${f(ca)}/${f(CA)}/${bm}`;
   let n = ctx.gsNames.get(key);
   if (!n) { n = `GS${ctx.gsNames.size + 1}`; ctx.gsNames.set(key, n); }
   return n;
@@ -78,7 +83,7 @@ function strokeOps(st: Stroke): string {
   return `${f(st.width)} w ${cap} J ${join} j ${f(st.miterLimit)} M [${dash.map(f).join(' ')}] 0 d\n`;
 }
 
-function drawShape(ctx: Ctx, el: ShapeElement, opacity: number): void {
+function drawShape(ctx: Ctx, el: ShapeElement, opacity: number, bm: string): void {
   const fill = el.fill, stroke = el.stroke && el.stroke.width > 0 ? el.stroke : null;
   const rule = el.type === 'path' && el.fillRule === 'evenodd' ? '*' : '';
   const path = shapePath(el, null);
@@ -92,12 +97,12 @@ function drawShape(ctx: Ctx, el: ShapeElement, opacity: number): void {
     }
     if (b && b.w > 0 && b.h > 0) {
       const name = shadingFor(ctx, fill);
-      ctx.ops.push(`q\n/${gsName(ctx, opacity, opacity)} gs\n${path}W${rule} n\n${f(b.w)} 0 0 ${f(b.h)} ${f(b.x)} ${f(b.y)} cm\n/${name} sh\nQ\n`);
+      ctx.ops.push(`q\n/${gsName(ctx, opacity, opacity, bm)} gs\n${path}W${rule} n\n${f(b.w)} 0 0 ${f(b.h)} ${f(b.x)} ${f(b.y)} cm\n/${name} sh\nQ\n`);
     }
   }
   const solidFill: SolidPaint | null = canFill && fill && fill.type === 'solid' ? fill : null;
   if (!solidFill && !stroke) return;
-  let s = `q\n/${gsName(ctx, (solidFill?.alpha ?? 1) * opacity, (stroke?.paint.alpha ?? 1) * opacity)} gs\n`;
+  let s = `q\n/${gsName(ctx, (solidFill?.alpha ?? 1) * opacity, (stroke?.paint.alpha ?? 1) * opacity, bm)} gs\n`;
   if (solidFill) s += `${rgb(solidFill.color)} rg\n`;
   if (stroke) s += `${rgb(stroke.paint.color)} RG\n${strokeOps(stroke)}`;
   s += path;
@@ -105,8 +110,9 @@ function drawShape(ctx: Ctx, el: ShapeElement, opacity: number): void {
   ctx.ops.push(s + 'Q\n');
 }
 
-function drawElement(ctx: Ctx, el: Element, opacity: number): void {
+function drawElement(ctx: Ctx, el: Element, opacity: number, inheritedBm = 'Normal'): void {
   if (!el.visible) return;
+  const bm = el.blend ? PDF_BLEND[el.blend] ?? inheritedBm : inheritedBm;   // blend modes are carried down to the shapes; live effects cannot be expressed in PDF
   const t = el.transform;
   const op = opacity * el.opacity;
   ctx.ops.push('q\n');
@@ -120,9 +126,9 @@ function drawElement(ctx: Ctx, el: Element, opacity: number): void {
           ? `${tracePdf([{ x: clipEl.x, y: clipEl.y, inX: 0, inY: 0, outX: 0, outY: 0 }, { x: clipEl.x + clipEl.w, y: clipEl.y, inX: 0, inY: 0, outX: 0, outY: 0 }, { x: clipEl.x + clipEl.w, y: clipEl.y + clipEl.h, inX: 0, inY: 0, outX: 0, outY: 0 }, { x: clipEl.x, y: clipEl.y + clipEl.h, inX: 0, inY: 0, outX: 0, outY: 0 }], true, clipEl.transform)}W n\n`
           : `${shapePath(clipEl, clipEl.transform)}W${clipEl.type === 'path' && clipEl.fillRule === 'evenodd' ? '*' : ''} n\n`);
       }
-      for (const c of el.children.slice(0, -1)) drawElement(ctx, c, op);
-    } else for (const c of el.children) drawElement(ctx, c, op);
-  } else drawShape(ctx, el, op);
+      for (const c of el.children.slice(0, -1)) drawElement(ctx, c, op, bm);
+    } else for (const c of el.children) drawElement(ctx, c, op, bm);
+  } else drawShape(ctx, el, op, bm);
   ctx.ops.push('Q\n');
 }
 
@@ -163,7 +169,7 @@ export function exportPdf(doc: VDocument, artboards: Artboard[] = doc.artboards,
     const contentId = objects.length + 1; reserve();
     const pageId = objects.length + 1; reserve();
     pageIds.push(pageId);
-    const gsDict = [...ctx.gsNames.entries()].map(([k, n]) => { const [ca, CA] = k.split('/'); return `/${n} << /Type /ExtGState /ca ${ca} /CA ${CA} >>`; }).join(' ');
+    const gsDict = [...ctx.gsNames.entries()].map(([k, n]) => { const [ca, CA, bm] = k.split('/'); return `/${n} << /Type /ExtGState /ca ${ca} /CA ${CA}${bm && bm !== 'Normal' ? ` /BM /${bm}` : ''} >>`; }).join(' ');
     const shDict = ctx.shadings.map((d, i) => `/Sh${i + 1} ${d}`).join(' ');
     set(contentId, `<< /Length ${content.length} >>\nstream\n${content}endstream`);
     set(pageId, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${f(W)} ${f(H)}]${bleed > 0 ? ` /BleedBox [0 0 ${f(W)} ${f(H)}] /TrimBox [${f(B)} ${f(B)} ${f(W - B)} ${f(H - B)}]` : ''} /Contents ${contentId} 0 R /Resources << /ExtGState << ${gsDict} >> /Shading << ${shDict} >> >> >>`);

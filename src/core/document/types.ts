@@ -44,6 +44,15 @@ export interface Stroke {
   dash: number[];
 }
 
+export const BLEND_MODES = ['normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten', 'color-dodge', 'color-burn', 'hard-light', 'soft-light', 'difference', 'exclusion', 'hue', 'saturation', 'color', 'luminosity'] as const;
+export type BlendMode = (typeof BLEND_MODES)[number];
+
+/** Live (non-destructive) effects. Radii/offsets are in document units, so they scale with the artwork. */
+export type Effect =
+  | { type: 'blur'; radius: number }
+  | { type: 'dropShadow'; dx: number; dy: number; blur: number; color: string; alpha: number }
+  | { type: 'outerGlow'; blur: number; color: string; alpha: number };
+
 interface BaseElement {
   id: string;
   name: string;
@@ -53,6 +62,10 @@ interface BaseElement {
   opacity: number;
   /** Local → parent transform. */
   transform: Matrix;
+  /** Blend mode against what is beneath (default normal). */
+  blend?: BlendMode;
+  /** Live effects, applied in order. */
+  effects?: Effect[];
 }
 
 export interface ShapeStyle {

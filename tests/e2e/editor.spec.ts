@@ -963,3 +963,38 @@ test('custom keyboard shortcuts: rebind, conflicts, persistence across reload, t
   await expect(page.getByTestId('km-msg')).toContainText('Imported');
   await expect(page.getByTestId('km-tool.rect')).toHaveText('K');
 });
+
+test('Appearance and Transparency panels: add/edit/remove live effects, blend mode, warnings on PDF export, save/reopen', async ({ page }, info) => {
+  await page.keyboard.press('m'); await page.getByTestId('swatch-ff0000').click();
+  await dragDoc(page, 300, 300, 600, 500);
+  await expect(page.getByTestId('ap-fill')).toContainText('#ff0000');
+  await page.getByTestId('blend-mode').selectOption('multiply');
+  await page.getByTestId('fx-kind').selectOption('dropShadow');
+  await page.getByTestId('fx-add').click();
+  await page.getByTestId('fx-dx-0').fill('40'); await page.getByTestId('fx-dx-0').press('Enter');
+  await page.getByTestId('fx-kind').selectOption('blur');
+  await page.getByTestId('fx-add').click();
+  let el = (await elements(page))[0] as unknown as { blend: string; effects: { type: string; dx?: number; radius?: number }[] };
+  expect(el.blend).toBe('multiply');
+  expect(el.effects.map((e) => e.type)).toEqual(['dropShadow', 'blur']);
+  expect(el.effects[0].dx).toBe(40);
+  await page.getByTestId('fx-remove-1').click();
+  el = (await elements(page))[0] as never;
+  expect(el.effects).toHaveLength(1);
+  // PDF export warns that effects are lost
+  await page.keyboard.press('Control+Shift+e');
+  await page.getByTestId('export-format').selectOption('pdf');
+  await expect(page.getByTestId('export-issues')).toContainText('PDF cannot represent them');
+  await page.keyboard.press('Escape');
+  // survives save and reopen
+  const original = await docOf(page);
+  const [save] = await Promise.all([page.waitForEvent('download'), page.keyboard.press('Control+s')]);
+  const file = info.outputPath('fx.vstudio'); await save.saveAs(file);
+  await page.keyboard.press('Control+n'); await page.getByTestId('new-create').click();
+  const chooser = page.waitForEvent('filechooser');
+  await page.keyboard.press('Control+o');
+  await (await chooser).setFiles(file);
+  await expect.poll(() => docOf(page)).toEqual(original);
+  await page.keyboard.press('Control+a');
+  await expect(page.getByTestId('fx-0')).toBeVisible();      // the effect is still listed (and editable) after reopening
+});

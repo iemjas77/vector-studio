@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { FORMAT_NAME, FORMAT_VERSION, type Element, type VDocument } from './types';
+import { BLEND_MODES, FORMAT_NAME, FORMAT_VERSION, type Element, type VDocument } from './types';
 
 export class DocumentFormatError extends Error {
   constructor(message: string) {
@@ -26,7 +26,14 @@ const stroke = z.object({
   miterLimit: num.min(1),
   dash: z.array(num.min(0)),
 });
+const effect = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('blur'), radius: num.min(0).max(1000) }),
+  z.object({ type: z.literal('dropShadow'), dx: num, dy: num, blur: num.min(0).max(1000), color, alpha: num.min(0).max(1) }),
+  z.object({ type: z.literal('outerGlow'), blur: num.min(0).max(1000), color, alpha: num.min(0).max(1) }),
+]);
 const baseShape = {
+  blend: z.enum(BLEND_MODES).optional(),
+  effects: z.array(effect).max(20).optional(),
   id: z.string().min(1),
   name: z.string(),
   visible: z.boolean(),

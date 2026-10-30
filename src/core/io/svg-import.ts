@@ -3,7 +3,7 @@ import { IDENTITY, multiply, rotate, scale, translate } from '../geometry/matrix
 import type { Matrix } from '../geometry/types';
 import {
   createArtboard, createDocument, createEllipse, createGroup, createLayer, createPath, createRect, defaultStroke, solid,
-  type Element, type Layer, type Paint, type Stroke, type VDocument,
+  BLEND_MODES, type BlendMode, type Element, type Layer, type Paint, type Stroke, type VDocument,
 } from '../document';
 import { node } from '../geometry/path';
 import { parseColor } from './colors';
@@ -221,7 +221,10 @@ class Importer {
       const i = decl.indexOf(':');
       if (i > 0 && decl.slice(0, i).trim() === 'opacity') a.opacity = decl.slice(i + 1).trim();
     }
+    const blendRaw = /mix-blend-mode\s*:\s*([a-z-]+)/.exec(a.style ?? '')?.[1] ?? a['mix-blend-mode'];
+    if (a.filter && !a['data-keep-filter']) this.warn('SVG filters are not imported (the effect is lost, the artwork itself is kept)');
     const common = {
+      blend: blendRaw && (BLEND_MODES as readonly string[]).includes(blendRaw) && blendRaw !== 'normal' ? (blendRaw as BlendMode) : undefined,
       name: a['data-name'] ?? a.id ?? undefined,
       opacity: a.opacity !== undefined ? Math.max(0, Math.min(1, parseFloat(a.opacity))) : 1,
       transform: parseTransform(a.transform),
@@ -230,6 +233,7 @@ class Importer {
       this.fixGradient(el);
       el.name = common.name || def;
       el.opacity = common.opacity;
+      if (common.blend) el.blend = common.blend;
       el.transform = common.transform;
       return el;
     };

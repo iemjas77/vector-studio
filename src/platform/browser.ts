@@ -24,7 +24,7 @@ export const browserPlatform: Platform = {
         resolve({ name: f.name, text: await f.text() });
       });
       // Defensive: a 'cancel' may be dispatched shortly before a 'change' on some browsers, so give a real selection a moment to win.
-      input.addEventListener('cancel', () => { setTimeout(() => finish(null), 600); });
+      input.addEventListener('cancel', () => { setTimeout(() => finish(null), 1500); });
       document.body.appendChild(input);
       input.click();
     });
@@ -43,7 +43,7 @@ export const browserPlatform: Platform = {
         input.remove();
         resolve(list.length ? await Promise.all(list.map(async (f) => ({ name: f.name, text: await f.text() }))) : null);
       });
-      input.addEventListener('cancel', () => { setTimeout(() => { if (!settled) { settled = true; input.remove(); resolve(null); } }, 600); });
+      input.addEventListener('cancel', () => { setTimeout(() => { if (!settled) { settled = true; input.remove(); resolve(null); } }, 1500); });
       document.body.appendChild(input);
       input.click();
     });
@@ -63,7 +63,7 @@ export const browserPlatform: Platform = {
         input.remove();
         resolve({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) });
       });
-      input.addEventListener('cancel', () => { setTimeout(() => finish(null), 600); });
+      input.addEventListener('cancel', () => { setTimeout(() => finish(null), 1500); });
       document.body.appendChild(input);
       input.click();
     });

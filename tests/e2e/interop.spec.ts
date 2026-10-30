@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { createCanvas } from '@napi-rs/canvas';
-import { PNG } from 'pngjs';
+import { PNG } from "pngjs";
 import {
   addElement, createDocument, createEllipse, createPath, createRect, createText, defaultStroke, groupElements, makeClippingMask, setIdGenerator, solid,
 } from '../../src/core/document';
@@ -58,4 +58,35 @@ test('exported SVG renders the same in Chromium as in our renderer', async ({ pa
   expect(at(rgba, 60, 55)).toEqual([0xd0, 0x30, 0x30]);
   expect(at(rgba, 250, 170)).toEqual([0xff, 0xfb, 0xe6]);         // the evenodd hole shows the page background
   expect(at(rgba, 215, 135)).toEqual([0x60, 0x30, 0xa0]);
+});
+
+test('blend modes and live effects render the same in Chromium SVG as in our renderer', async ({ page }) => {
+  let n = 0; setIdGenerator(() => 'j' + ++n);
+  const doc = createDocument('fx', 320, 200);
+  doc.artboards[0].background = '#ffffff';
+  addElement(doc, createRect(0, 0, 320, 200, { fill: solid('#ffee00'), stroke: null }));
+  addElement(doc, createRect(30, 30, 80, 80, { fill: solid('#d02020'), stroke: null, blend: 'multiply' }));
+  addElement(doc, createRect(140, 30, 70, 70, { fill: solid('#2040d0'), stroke: null, effects: [{ type: 'dropShadow', dx: 12, dy: 10, blur: 10, color: '#000000', alpha: 0.6 }] }));
+  addElement(doc, createRect(240, 40, 50, 50, { fill: solid('#008800'), stroke: null, effects: [{ type: 'blur', radius: 5 }] }));
+  addElement(doc, createEllipse(80, 150, 30, 20, { fill: solid('#ffffff'), stroke: null, effects: [{ type: 'outerGlow', blur: 14, color: '#aa00ff', alpha: 1 }] }));
+  const off = rasterizeArtboard(doc, doc.artboards[0], (w, h) => { const c = createCanvas(w, h); return { canvas: c, ctx: c.getContext('2d') as unknown as CanvasRenderingContext2D }; }, {});
+  const ours = PNG.sync.read((off.canvas as unknown as { toBuffer(t: 'image/png'): Buffer }).toBuffer('image/png'));
+  await page.setContent('<html><body style="margin:0"><canvas id="c" width="320" height="200"></canvas></body></html>');
+  const url = 'data:image/svg+xml;base64,' + Buffer.from(exportSvg(doc)).toString('base64');
+  const rgba: number[] = await page.evaluate(async (u) => {
+    const img = new Image();
+    await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = () => rej(new Error('Chromium could not load the SVG')); img.src = u; });
+    const g = (document.getElementById('c') as HTMLCanvasElement).getContext('2d')!;
+    g.drawImage(img, 0, 0);
+    return Array.from(g.getImageData(0, 0, 320, 200).data);
+  }, url);
+  let bad = 0;
+  for (let i = 0; i < ours.data.length; i += 4) {
+    const d = Math.abs(ours.data[i] - rgba[i]) + Math.abs(ours.data[i + 1] - rgba[i + 1]) + Math.abs(ours.data[i + 2] - rgba[i + 2]);
+    if (d > 90) bad++;
+  }
+  expect(bad / (320 * 200), `different pixels: ${bad}`).toBeLessThan(0.02);
+  const at = (arr: ArrayLike<number>, x: number, y: number) => [arr[(320 * y + x) * 4], arr[(320 * y + x) * 4 + 1], arr[(320 * y + x) * 4 + 2]];
+  const m = at(rgba, 70, 70);                                  // multiply: (d0,20,20) × (ff,ee,00) = (d0,1e,00)
+  expect(Math.abs(m[0] - 0xd0) + Math.abs(m[1] - 0x1e) + Math.abs(m[2])).toBeLessThan(6);
 });
