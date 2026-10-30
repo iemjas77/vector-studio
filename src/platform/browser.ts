@@ -29,6 +29,25 @@ export const browserPlatform: Platform = {
       input.click();
     });
   },
+  openTextFiles(accept, folder) {
+    return new Promise<OpenedFile[] | null>((resolve) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.multiple = true;
+      if (folder) (input as HTMLInputElement & { webkitdirectory: boolean }).webkitdirectory = true; else input.accept = accept.join(',');
+      input.style.display = 'none';
+      let settled = false;
+      input.addEventListener('change', async () => {
+        settled = true;
+        const list = [...(input.files ?? [])].filter((f) => !folder || accept.some((a) => f.name.toLowerCase().endsWith(a)));
+        input.remove();
+        resolve(list.length ? await Promise.all(list.map(async (f) => ({ name: f.name, text: await f.text() }))) : null);
+      });
+      input.addEventListener('cancel', () => { setTimeout(() => { if (!settled) { settled = true; input.remove(); resolve(null); } }, 600); });
+      document.body.appendChild(input);
+      input.click();
+    });
+  },
   openBinaryFile(accept) {
     return new Promise((resolve) => {
       const input = document.createElement('input');

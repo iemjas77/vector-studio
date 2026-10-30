@@ -115,3 +115,13 @@ export function describeStep(s: ActionStep): string {
 }
 
 export function rasterToBytes(bytes: Uint8Array, format: 'png' | 'jpeg', ppi: number): Uint8Array { return format === 'jpeg' ? setJpegPpi(bytes, ppi) : setPngPpi(bytes, ppi); }
+
+/** Default parameters offered when a step is inserted by hand (every one validates against its schema). */
+export const STEP_TEMPLATES: Record<string, Record<string, unknown>> = {
+  selectAll: {}, deselect: {}, selectByType: { types: ['text'] }, group: {}, ungroup: {}, makeCompound: {}, releaseCompound: {}, makeClip: {}, releaseClip: {},
+  align: { mode: 'hcenter', toArtboard: true }, distribute: { mode: 'hspace' }, boolean: { op: 'unite' }, expandStroke: {}, offsetPath: { distance: 5, join: 'round' },
+  createOutlines: {}, scaleSelection: { percent: 50 }, setFill: { color: '#000000', alpha: 1 }, setStroke: { color: '#000000', width: 2 },
+  replaceColor: { from: '#ff0000', to: '#0000ff' }, reduceColors: { max: 6 }, cleanup: {}, resizeArtboard: { width: 4500, height: 5400, mode: 'fit' },
+  setBackground: { color: null }, renameLayers: { pattern: 'Layer {n}' }, exportRaster: { format: 'png', width: 4500, transparent: true, quality: 0.92 },
+  exportSvg: {}, exportPdf: {}, saveCopy: { suffix: '-copy' }, prompt: { message: 'Check the artwork, then continue' }, stop: {},
+};

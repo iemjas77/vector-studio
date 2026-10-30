@@ -7,6 +7,7 @@ import { EXPORT_PRESETS, type ExportFormat } from '../export-presets';
 import { checkExport, physicalSize } from '../../core/io';
 import { useApp } from '../hooks';
 import { useUi } from '../store';
+import { actions } from '../actions-service';
 
 function Dialog({ title, children, onClose, testId }: { title: string; children: ReactNode; onClose(): void; testId: string }) {
   return (
@@ -147,7 +148,13 @@ export function ExportPngDialog() {
             setBusy(true);
             const ok = await runExport(app, { format, artboardIds: targets.map((a) => a.id), ...opts, transparent, quality: +quality / 100, ppi: ppiNum, bleed: bleedNum });
             setBusy(false);
-            if (ok) close();
+            if (ok) {
+              const abName = all ? undefined : ab.name;
+              if (raster) actions.note('exportRaster', { format, artboard: abName, ...(mode === 'scale' ? { scale: +scale } : { width: Math.round(+width) }), transparent: format === 'png' ? transparent : false, quality: +quality / 100, ppi: ppiNum });
+              else if (format === 'svg') actions.note('exportSvg', { artboard: abName });
+              else actions.note('exportPdf', { bleed: bleedNum || undefined });
+              close();
+            }
           }}>Export{targets.length > 1 && format !== 'pdf' ? ` ${targets.length} files` : ''}</button>
         </div>
       </div>

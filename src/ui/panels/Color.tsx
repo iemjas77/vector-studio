@@ -2,6 +2,7 @@ import { solid, solidOf } from '../../core/document';
 import { GradientEditor, convertPaintType, cssGradient } from './Gradient';
 import { useApp } from '../hooks';
 import { useUi } from '../store';
+import { actions } from '../actions-service';
 import { NumField } from '../controls';
 import { useEffect, useState } from 'react';
 
@@ -32,11 +33,13 @@ export function ColorPanel() {
   const apply = (color: string | null, alpha?: number) => {
     if (color === null) {
       if (target === 'fill') ed.setFill(null); else ed.updateStroke(null);
+      if (ed.selection.length) actions.note(target === 'fill' ? 'setFill' : 'setStroke', target === 'fill' ? { color: null } : { none: true });
       return;
     }
     const a = alpha ?? paint?.alpha ?? 1;
     if (target === 'fill') ed.setFill(solid(color, a));
     else ed.updateStroke({ paint: solid(color, a) });
+    if (ed.selection.length) actions.note(target === 'fill' ? 'setFill' : 'setStroke', target === 'fill' ? { color, alpha: a } : { color });
   };
 
   return (

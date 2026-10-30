@@ -56,6 +56,22 @@ ipcMain.handle('vs:open', async (_e, accept) => {
   return { name: path.basename(p), path: p, text: fs.readFileSync(p, 'utf8') };
 });
 
+ipcMain.handle('vs:openMany', async (_e, accept, folder) => {
+  const exts = accept.filter((a) => a.startsWith('.')).map((a) => a.slice(1).toLowerCase());
+  const res = await dialog.showOpenDialog({ properties: folder ? ['openDirectory'] : ['openFile', 'multiSelections'], filters: folder ? [] : [{ name: 'Supported files', extensions: exts }] });
+  if (res.canceled || res.filePaths.length === 0) return null;
+  let paths = res.filePaths;
+  if (folder) paths = fs.readdirSync(paths[0], { withFileTypes: true }).filter((d) => d.isFile() && exts.includes(path.extname(d.name).slice(1).toLowerCase())).map((d) => path.join(res.filePaths[0], d.name));
+  let total = 0;
+  const out = [];
+  for (const p of paths) {
+    total += fs.statSync(p).size;
+    if (total > 500 * 1024 * 1024) throw new Error('The selected files are larger than 500 MB in total');
+    out.push({ name: path.basename(p), path: p, text: fs.readFileSync(p, 'utf8') });
+  }
+  return out;
+});
+
 ipcMain.handle('vs:openBinary', async (_e, accept) => {
   const exts = accept.filter((a) => a.startsWith('.')).map((a) => a.slice(1));
   const res = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Images', extensions: exts }, { name: 'All files', extensions: ['*'] }] });

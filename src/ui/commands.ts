@@ -5,6 +5,7 @@ import type { ToolId } from '../editor/types';
 import { exportImage } from '../render/browser-export';
 import { platform } from '../platform';
 import { useUi } from './store';
+import { actions } from './actions-service';
 import type { Workspace } from './workspace';
 
 export interface App {
@@ -23,10 +24,13 @@ export interface Command {
   run(app: App): void | Promise<void>;
 }
 
+/** Perform a recordable step through the shared executor (so Actions record exactly what ran). */
+export const doStep = (a: App, type: string, params: Record<string, unknown> = {}) => { void actions.perform(a.ed, type, params).catch((e: Error) => useUi.getState().notify(e.message, 'error')); };
 const notify = (t: string, k: 'info' | 'error' | 'warn' = 'info') => useUi.getState().notify(t, k);
 const hasSel = (a: App) => a.ed.selection.length > 0;
 
-export const baseName = (n: string) => n.replace(/\.[^.]+$/, '');
+export { baseName } from './commands-util';
+import { baseName } from './commands-util';
 
 export async function saveDocument(app: App, asNew = false): Promise<boolean> {
   const ed = app.ed;
@@ -191,28 +195,28 @@ export const COMMANDS: Command[] = [
   { id: 'edit.pasteInPlace', label: 'Paste in Place', shortcut: 'Ctrl+Shift+V', enabled: (a) => a.ed.clipboard.length > 0, run: (a) => a.ed.paste(true) },
   { id: 'edit.duplicate', label: 'Duplicate', shortcut: 'Ctrl+D', enabled: hasSel, run: (a) => a.ed.duplicateSelection(10, 10) },
   { id: 'edit.delete', label: 'Delete', shortcut: 'Delete', enabled: hasSel, run: (a) => a.ed.deleteSelection() },
-  { id: 'edit.selectAll', label: 'Select All', shortcut: 'Ctrl+A', run: (a) => a.ed.selectAll() },
-  { id: 'edit.deselect', label: 'Deselect', shortcut: 'Ctrl+Shift+A', enabled: hasSel, run: (a) => a.ed.clearSelection() },
+  { id: 'edit.selectAll', label: 'Select All', shortcut: 'Ctrl+A', run: (a) => doStep(a, 'selectAll') },
+  { id: 'edit.deselect', label: 'Deselect', shortcut: 'Ctrl+Shift+A', enabled: hasSel, run: (a) => doStep(a, 'deselect') },
 
-  { id: 'object.group', label: 'Group', shortcut: 'Ctrl+G', enabled: (a) => a.ed.selection.length > 1, run: (a) => a.ed.group() },
-  { id: 'object.ungroup', label: 'Ungroup', shortcut: 'Ctrl+Shift+G', enabled: (a) => a.ed.selectedElements.some((e) => e.type === 'group'), run: (a) => a.ed.ungroup() },
+  { id: 'object.group', label: 'Group', shortcut: 'Ctrl+G', enabled: (a) => a.ed.selection.length > 1, run: (a) => doStep(a, 'group') },
+  { id: 'object.ungroup', label: 'Ungroup', shortcut: 'Ctrl+Shift+G', enabled: (a) => a.ed.selectedElements.some((e) => e.type === 'group'), run: (a) => doStep(a, 'ungroup') },
   { id: 'object.front', label: 'Bring to Front', shortcut: 'Ctrl+Shift+]', enabled: hasSel, run: (a) => a.ed.arrange('front') },
   { id: 'object.forward', label: 'Bring Forward', shortcut: 'Ctrl+]', enabled: hasSel, run: (a) => a.ed.arrange('forward') },
   { id: 'object.backward', label: 'Send Backward', shortcut: 'Ctrl+[', enabled: hasSel, run: (a) => a.ed.arrange('backward') },
   { id: 'object.back', label: 'Send to Back', shortcut: 'Ctrl+Shift+[', enabled: hasSel, run: (a) => a.ed.arrange('back') },
-  { id: 'object.unite', label: 'Unite', enabled: (a) => a.ed.selection.length > 1, run: (a) => { a.ed.boolean('unite'); } },
-  { id: 'object.subtract', label: 'Minus Front', enabled: (a) => a.ed.selection.length > 1, run: (a) => { a.ed.boolean('subtract'); } },
-  { id: 'object.intersect', label: 'Intersect', enabled: (a) => a.ed.selection.length > 1, run: (a) => { a.ed.boolean('intersect'); } },
-  { id: 'object.exclude', label: 'Exclude Overlap', enabled: (a) => a.ed.selection.length > 1, run: (a) => { a.ed.boolean('exclude'); } },
-  { id: 'object.makeCompound', label: 'Make Compound Path', shortcut: 'Ctrl+8', enabled: (a) => a.ed.selection.length > 1, run: (a) => a.ed.makeCompound() },
-  { id: 'object.releaseCompound', label: 'Release Compound Path', shortcut: 'Ctrl+Alt+8', enabled: (a) => a.ed.selectedElements.some((e) => e.type === 'path' && e.extra.length > 0), run: (a) => a.ed.releaseCompound() },
-  { id: 'object.makeClip', label: 'Make Clipping Mask', shortcut: 'Ctrl+7', enabled: (a) => a.ed.selection.length > 1, run: (a) => a.ed.makeClip() },
-  { id: 'object.releaseClip', label: 'Release Clipping Mask', shortcut: 'Ctrl+Alt+7', enabled: (a) => a.ed.selectedElements.some((e) => e.type === 'group' && !!e.clip), run: (a) => a.ed.releaseClip() },
-  { id: 'object.outlines', label: 'Create Outlines', shortcut: 'Ctrl+Shift+O', enabled: (a) => a.ed.selectedTexts.length > 0, run: (a) => a.ed.convertSelectionToPaths() },
+  { id: 'object.unite', label: 'Unite', enabled: (a) => a.ed.selection.length > 1, run: (a) => doStep(a, 'boolean', { op: 'unite' }) },
+  { id: 'object.subtract', label: 'Minus Front', enabled: (a) => a.ed.selection.length > 1, run: (a) => doStep(a, 'boolean', { op: 'subtract' }) },
+  { id: 'object.intersect', label: 'Intersect', enabled: (a) => a.ed.selection.length > 1, run: (a) => doStep(a, 'boolean', { op: 'intersect' }) },
+  { id: 'object.exclude', label: 'Exclude Overlap', enabled: (a) => a.ed.selection.length > 1, run: (a) => doStep(a, 'boolean', { op: 'exclude' }) },
+  { id: 'object.makeCompound', label: 'Make Compound Path', shortcut: 'Ctrl+8', enabled: (a) => a.ed.selection.length > 1, run: (a) => doStep(a, 'makeCompound') },
+  { id: 'object.releaseCompound', label: 'Release Compound Path', shortcut: 'Ctrl+Alt+8', enabled: (a) => a.ed.selectedElements.some((e) => e.type === 'path' && e.extra.length > 0), run: (a) => doStep(a, 'releaseCompound') },
+  { id: 'object.makeClip', label: 'Make Clipping Mask', shortcut: 'Ctrl+7', enabled: (a) => a.ed.selection.length > 1, run: (a) => doStep(a, 'makeClip') },
+  { id: 'object.releaseClip', label: 'Release Clipping Mask', shortcut: 'Ctrl+Alt+7', enabled: (a) => a.ed.selectedElements.some((e) => e.type === 'group' && !!e.clip), run: (a) => doStep(a, 'releaseClip') },
+  { id: 'object.outlines', label: 'Create Outlines', shortcut: 'Ctrl+Shift+O', enabled: (a) => a.ed.selectedTexts.length > 0, run: (a) => doStep(a, 'createOutlines') },
   { id: 'object.textOnPath', label: 'Make Text on Path', enabled: (a) => a.ed.selectedTexts.length === 1 && a.ed.selectedElements.some((e) => e.type === 'path'), run: (a) => { a.ed.makeTextOnPath(); } },
   { id: 'object.releaseTextPath', label: 'Release Text from Path', enabled: (a) => a.ed.selectedTexts.some((t) => !!t.path), run: (a) => a.ed.releaseTextFromPath() },
   { id: 'object.toPath', label: 'Convert to Path', enabled: (a) => a.ed.selection.some((id) => { const t = getElement(a.ed.doc, id)?.type; return t === 'rect' || t === 'ellipse'; }), run: (a) => a.ed.convertSelectionToPaths() },
-  { id: 'object.expandStroke', label: 'Expand Stroke', enabled: (a) => a.ed.selectedElements.some((e) => e.type !== 'group' && !!e.stroke && e.stroke.width > 0), run: (a) => { a.ed.expandStrokes(); } },
+  { id: 'object.expandStroke', label: 'Expand Stroke', enabled: (a) => a.ed.selectedElements.some((e) => e.type !== 'group' && !!e.stroke && e.stroke.width > 0), run: (a) => doStep(a, 'expandStroke') },
   { id: 'object.offsetPath', label: 'Offset Path…', enabled: hasSel, run: () => useUi.getState().openDialog('offset') },
   { id: 'object.cleanup', label: 'Clean Up Vectors…', run: () => useUi.getState().openDialog('cleanup') },
   { id: 'object.colors', label: 'Reduce / Replace Colors…', run: () => useUi.getState().openDialog('colors') },

@@ -750,3 +750,112 @@ test('real double-click enters isolation mode on a group (browser click counting
   await clickDoc(page, 150, 150, { clickCount: 2 });
   expect(await page.evaluate(() => !!(window as unknown as { __vs: { workspace: { current: { isolation: string | null } } } }).__vs.workspace.current.isolation)).toBe(true);
 });
+
+test('Actions: record menu/panel commands, replay on another document, persist across reload, export/import, batch', async ({ page }, info) => {
+  test.setTimeout(120000);
+  const fs = await import('node:fs');
+  const act = (id: string) => page.getByTestId(id);
+  const makeRect = async (hex: string, x: number) => { await page.keyboard.press('m'); await dragDoc(page, x, 100, x + 200, 300); await page.getByTestId('color-hex').fill(hex); await page.getByTestId('color-hex').press('Enter'); };
+
+  await act('act-new').click();
+  await expect(act('action-Action 1')).toBeVisible();
+  await act('act-record').click();
+  // The recorded steps are semantic commands, not mouse coordinates:
+  await makeRect('#ff0000', 100);
+  await makeRect('#fe0505', 500);
+  await page.keyboard.press('v');
+  await page.getByRole('menubar').getByText('Edit', { exact: true }).click();
+  await page.getByTestId('menu-edit.selectAll').click();
+  await page.getByTestId('align-top').click();
+  await act('act-pause-rec').click();
+  await page.getByTestId('align-bottom').click();         // performed while paused: must NOT be recorded
+  await act('act-pause-rec').click();
+  await page.getByRole('menubar').getByText('Object', { exact: true }).click();
+  await page.getByTestId('menu-object.group').click();
+  await act('act-stop-rec').click();
+  const labels = await page.locator('[data-testid^="step-label-"]').allTextContents();
+  expect(labels.join('|')).toContain('Select All');
+  expect(labels.join('|')).toContain('Align (mode=top');
+  expect(labels.join('|')).not.toContain('bottom');
+  expect(labels.join('|')).toContain('Group');
+  expect(labels.join('|')).not.toMatch(/x=|y=/);          // no coordinates
+
+  // add an export step by hand and a disabled step
+  await act('act-insert-type').selectOption('exportSvg');
+  await act('act-insert').click();
+  await act('step-enable-1').uncheck();                   // disable "Select All"... then re-enable below to test toggling
+  await act('step-enable-1').check();
+
+  // Reload: the action library must still be there (persisted).
+  await page.evaluate(() => (window as unknown as { __vsActions: { flush(): void } }).__vsActions.flush());
+  await page.reload();
+  await page.waitForSelector('[data-testid="canvas"]');
+  await page.evaluate(() => (window as unknown as { __vsFontsReady: Promise<void> }).__vsFontsReady);
+  await expect(act('action-Action 1')).toBeVisible();
+
+  // Play it on a fresh document with two different shapes.
+  await page.keyboard.press('Control+n'); await page.getByTestId('new-create').click();
+  await makeRect('#00aa00', 100);
+  await makeRect('#00ab00', 600);
+  await act('action-Action 1').click();
+  const [dl] = await Promise.all([page.waitForEvent('download'), act('act-play').click()]);
+  expect(dl.suggestedFilename()).toMatch(/\.svg$/);
+  await expect(act('act-status')).toContainText('Finished');
+  const els = await elements(page);
+  expect(els).toHaveLength(1);
+  expect(els[0].type).toBe('group');
+  // Undo the whole run in one click.
+  await act('act-undo').click();
+  expect(await elements(page)).toHaveLength(2);
+
+  // Step-by-step execution.
+  await act('act-step').click();
+  await expect(act('act-status')).toContainText('Step 1 of');
+  await act('act-stop').click();
+
+  // Export the set, delete it, import it back.
+  const [exp] = await Promise.all([page.waitForEvent('download'), act('act-export').click()]);
+  const file = info.outputPath('set.vsactions'); await exp.saveAs(file);
+  const json = JSON.parse(fs.readFileSync(file, 'utf8'));
+  expect(json.format).toBe('vector-studio-actions');
+  const chooser = page.waitForEvent('filechooser');
+  await act('act-import').click();
+  await (await chooser).setFiles(file);
+  await expect(page.getByTestId('toast')).toContainText('Imported 1 action set');
+  await expect(page.locator('[data-testid="action-Action 1"]')).toHaveCount(2);
+});
+
+test('Batch dialog: runs an action over several files, reports the broken one, saves outputs, never touches inputs', async ({ page }, info) => {
+  test.setTimeout(90000);
+  const fs = await import('node:fs');
+  const { createDocument, createRect, addElement, serializeDocument, solid } = await import('../../src/core/document');
+  const mk = (name: string, color: string) => { const d = createDocument(name, 400, 400); addElement(d, createRect(50, 50, 200, 200, { fill: solid(color), stroke: null })); const f = info.outputPath(`${name}.vstudio`); fs.writeFileSync(f, serializeDocument(d)); return f; };
+  const a = mk('alpha', '#ff0000'), b = mk('beta', '#0000ff');
+  const broken = info.outputPath('broken.vstudio'); fs.writeFileSync(broken, '{"oops":true}');
+  const before = [a, b].map((f) => fs.readFileSync(f, 'utf8'));
+
+  await page.getByTestId('act-new').click();
+  await page.getByTestId('act-insert-type').selectOption('selectAll'); await page.getByTestId('act-insert').click();
+  await page.getByTestId('act-insert-type').selectOption('scaleSelection'); await page.getByTestId('act-insert').click();   // 50 %
+  await page.getByTestId('act-insert-type').selectOption('exportRaster'); await page.getByTestId('act-insert').click();    // png 4500 wide: override below
+  await page.getByTestId('step-edit-2').click();
+  await page.getByTestId('step-json').fill('{"format":"png","width":200,"transparent":true}');
+  await page.getByTestId('step-save').click();
+  await page.getByTestId('act-batch').click();
+  await expect(page.getByTestId('dialog-batch-actions')).toBeVisible();
+  await page.getByTestId('ba-pattern').fill('{n}-{file}');
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByTestId('ba-add').click();
+  await (await chooser).setFiles([a, broken, b]);
+  await expect(page.getByTestId('ba-count')).toHaveText('3 file(s)');
+  await page.getByTestId('ba-run').click();
+  await expect(page.getByTestId('ba-summary')).toHaveText('2 succeeded, 1 failed, 0 not run');
+  await expect(page.getByTestId('ba-log')).toContainText('broken.vstudio');
+  await expect(page.getByTestId('ba-log')).toContainText('Not a Vector Studio');
+  const names: string[] = [];
+  page.on('download', (d) => names.push(d.suggestedFilename()));
+  await page.getByTestId('ba-save').click();
+  await expect.poll(() => names.length, { timeout: 15000 }).toBe(2);
+  expect(names.sort()).toEqual(['1-alpha.png', '3-beta.png']);
+  expect([a, b].map((f) => fs.readFileSync(f, 'utf8'))).toEqual(before);
+});

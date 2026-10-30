@@ -1,4 +1,6 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { runActionBatch, type BatchFileResult } from '../../automation/batch-actions';
+import type { ExportedFile } from '../../automation/steps';
 import {
   cleanupDocument, computePalette, DEFAULT_CLEANUP, listColors, reduceColors, replaceColor, type CleanupOptions, type CleanupReport,
 } from '../../core/document';
@@ -9,6 +11,7 @@ import { exportImage } from '../../render/browser-export';
 import { platform } from '../../platform';
 import { useApp } from '../hooks';
 import { useUi } from '../store';
+import { actions } from '../actions-service';
 import { baseName } from '../commands';
 
 function Dlg({ title, children, onClose, testId }: { title: string; children: ReactNode; onClose(): void; testId: string }) {
@@ -24,7 +27,8 @@ function Dlg({ title, children, onClose, testId }: { title: string; children: Re
 const close = () => useUi.getState().openDialog(null);
 
 export function CleanupDialog() {
-  const { ed } = useApp();
+  const app = useApp();
+  const { ed } = app;
   const [o, setO] = useState<CleanupOptions>({ ...DEFAULT_CLEANUP });
   const [report, setReport] = useState<CleanupReport | null>(null);
   const bool = (k: keyof CleanupOptions, label: string) => (
@@ -41,7 +45,7 @@ export function CleanupDialog() {
         {report && <div data-testid="cleanup-report" style={{ color: '#9a9a9a' }}>Removed {report.removedObjects} object(s), {report.removedGroups} empty group(s), {report.removedNodes} duplicate anchor(s).</div>}
         <div className="row" style={{ justifyContent: 'flex-end' }}>
           <button className="btn" onClick={close}>Close</button>
-          <button className="btn btn-primary" data-testid="cleanup-run" onClick={() => { let r: CleanupReport | null = null; ed.apply('Clean up', (d) => { r = cleanupDocument(d, o); }); setReport(r); }}>Clean up</button>
+          <button className="btn btn-primary" data-testid="cleanup-run" onClick={() => { let r: CleanupReport | null = null; ed.apply('Clean up', (d) => { r = cleanupDocument(d, o); }); setReport(r); actions.note('cleanup', { options: o }); }}>Clean up</button>
         </div>
       </div>
     </Dlg>
@@ -49,7 +53,8 @@ export function CleanupDialog() {
 }
 
 export function ColorsDialog() {
-  const { ed } = useApp();
+  const app = useApp();
+  const { ed } = app;
   const colors = listColors(ed.doc);
   const [n, setN] = useState('6');
   const [from, setFrom] = useState(colors[0]?.color ?? '#000000');
@@ -64,9 +69,9 @@ export function ColorsDialog() {
         <div data-testid="colors-current">{colors.length} distinct colour{colors.length === 1 ? '' : 's'} in use: {colors.slice(0, 40).map((c) => sw(c.color))}</div>
         <div className="row">Reduce to <input type="text" data-testid="colors-target" style={{ width: 46 }} value={n} onChange={(e) => setN(e.target.value)} /> colours
           <span data-testid="colors-preview">→ {preview.map((c) => sw(c, 'p' + c))}</span></div>
-        <div className="row"><button className="btn btn-primary" data-testid="colors-reduce" disabled={colors.length === 0} onClick={() => { let res = { palette: [] as string[], changed: 0 }; ed.apply('Reduce colors', (d) => { res = reduceColors(d, target); }); setMsg(`${colors.length} → ${res.palette.length} colours (${res.changed} paints changed)`); }}>Reduce colours</button></div>
+        <div className="row"><button className="btn btn-primary" data-testid="colors-reduce" disabled={colors.length === 0} onClick={() => { let res = { palette: [] as string[], changed: 0 }; ed.apply('Reduce colors', (d) => { res = reduceColors(d, target); }); actions.note('reduceColors', { max: target }); setMsg(`${colors.length} → ${res.palette.length} colours (${res.changed} paints changed)`); }}>Reduce colours</button></div>
         <div className="row">Replace <input type="color" data-testid="colors-from" value={from} onChange={(e) => setFrom(e.target.value)} /> with <input type="color" data-testid="colors-to" value={to} onChange={(e) => setTo(e.target.value)} />
-          <button className="btn" data-testid="colors-replace" onClick={() => { let c = 0; ed.apply('Replace color', (d) => { c = replaceColor(d, from, to); }); setMsg(`Replaced ${c} paint(s)`); }}>Replace</button></div>
+          <button className="btn" data-testid="colors-replace" onClick={() => { let c = 0; ed.apply('Replace color', (d) => { c = replaceColor(d, from, to); }); actions.note('replaceColor', { from, to }); setMsg(`Replaced ${c} paint(s)`); }}>Replace</button></div>
         {msg && <div data-testid="colors-msg" style={{ color: '#9a9a9a' }}>{msg}</div>}
         <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={close}>Close</button></div>
       </div>
@@ -187,7 +192,85 @@ export function OffsetDialog() {
         {!ok && <div style={{ color: '#ff9a9a' }} data-testid="offset-error">Enter a distance other than 0 (at most 5000).</div>}
         <div className="row" style={{ justifyContent: 'flex-end' }}>
           <button className="btn" onClick={close}>Cancel</button>
-          <button className="btn btn-primary" data-testid="offset-go" disabled={!ok} onClick={() => { if (ed.offsetSelection(d, join) > 0) close(); }}>Offset</button>
+          <button className="btn btn-primary" data-testid="offset-go" disabled={!ok} onClick={() => { if (ed.offsetSelection(d, join) > 0) { actions.note('offsetPath', { distance: d, join }); close(); } }}>Offset</button>
+        </div>
+      </div>
+    </Dlg>
+  );
+}
+
+interface PickedFile { name: string; text: string }
+
+export function BatchActionsDialog() {
+  const lib = actions.library;
+  useSyncExternalStore((f) => actions.subscribe(f), () => actions.version);
+  const preselect = useUi((s) => s.batchAction);
+  const all = lib.sets.flatMap((s) => s.actions.map((a) => ({ ...a, set: s.name })));
+  const [actionId, setActionId] = useState(preselect ?? all[0]?.id ?? '');
+  const [files, setFiles] = useState<PickedFile[]>([]);
+  const [pattern, setPattern] = useState('{file}');
+  const [retries, setRetries] = useState('0');
+  const [cont, setCont] = useState(true);
+  const [saveProcessed, setSaveProcessed] = useState(true);
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState({ i: 0, n: 0, name: '' });
+  const [results, setResults] = useState<BatchFileResult[] | null>(null);
+  const [outputs, setOutputs] = useState<ExportedFile[]>([]);
+  const [err, setErr] = useState('');
+  const [signal] = useState(() => ({ aborted: false }));
+  const action = lib.find(actionId)?.action ?? null;
+
+  const add = async (folder: boolean) => {
+    const f = await platform.openTextFiles(['.vstudio'], folder);
+    if (!f) return;
+    setFiles((cur) => [...cur, ...f.filter((x) => !cur.some((c) => c.name === x.name))]);
+  };
+  const run = async () => {
+    if (!action) return;
+    setErr(''); setResults(null); setOutputs([]); signal.aborted = false; setRunning(true);
+    try {
+      const r = await runActionBatch(files, {
+        action, namePattern: pattern, retries: Math.max(0, Math.min(5, Math.round(+retries) || 0)), continueOnError: cont, saveResultIfNoExport: saveProcessed, signal,
+        rasterize: async (doc, ab, o) => (await exportImage(doc, ab, { format: o.format, scale: o.scale, width: o.width, transparent: o.transparent, quality: o.quality, ppi: o.ppi })).bytes,
+        onFile: (i, n, name) => { setProgress({ i, n, name }); return undefined; },
+      });
+      setResults(r.files); setOutputs(r.outputs);
+    } catch (e) { setErr((e as Error).message); } finally { setRunning(false); }
+  };
+  const logText = () => (results ?? []).map((f) => `${f.status.toUpperCase().padEnd(9)} ${f.name}${f.error ? ` – ${f.error}` : ''}${f.outputs.length ? ` → ${f.outputs.join(', ')}` : ''} (${Math.round(f.ms)} ms, ${f.attempts} attempt(s))`).join('\n');
+  const ok = (results ?? []).filter((r) => r.status === 'ok').length;
+
+  return (
+    <Dlg title="Batch process with an action" onClose={() => { signal.aborted = true; close(); }} testId="dialog-batch-actions">
+      <div className="flex flex-col gap-2" style={{ minWidth: 520 }}>
+        <div className="row"><span style={{ width: 70 }}>Action</span>
+          <select data-testid="ba-action" style={{ flex: 1 }} value={actionId} onChange={(e) => setActionId(e.target.value)} disabled={running}>
+            {all.map((a) => <option key={a.id} value={a.id}>{a.set} › {a.name} ({a.steps.filter((s) => s.enabled).length} steps)</option>)}
+          </select></div>
+        <div className="row"><button className="btn" data-testid="ba-add" disabled={running} onClick={() => add(false)}>Add files…</button>
+          <button className="btn" data-testid="ba-add-folder" disabled={running} onClick={() => add(true)}>Add folder…</button>
+          <button className="btn" disabled={running || !files.length} onClick={() => setFiles([])}>Clear</button><span className="text-mute" data-testid="ba-count">{files.length} file(s)</span></div>
+        <div className="border border-edge" style={{ maxHeight: 90, overflow: 'auto', background: '#262626' }} data-testid="ba-files">
+          {files.map((f) => <div key={f.name} className="layer-row"><span style={{ flex: 1 }}>{f.name}</span><button className="icon-btn" style={{ width: 18, height: 18 }} aria-label={`Remove ${f.name}`} disabled={running} onClick={() => setFiles(files.filter((x) => x !== f))}>×</button></div>)}
+        </div>
+        <div className="row"><span style={{ width: 70 }}>Naming</span><input type="text" data-testid="ba-pattern" style={{ flex: 1 }} value={pattern} onChange={(e) => setPattern(e.target.value)} disabled={running} title="Tokens: {file} {name} {n} {date}" /></div>
+        <div className="row"><label className="row"><input type="checkbox" data-testid="ba-continue" checked={cont} onChange={(e) => setCont(e.target.checked)} disabled={running} /> Keep going after a failure</label>
+          <span>Retries</span><input type="text" data-testid="ba-retries" style={{ width: 34 }} value={retries} onChange={(e) => setRetries(e.target.value)} disabled={running} />
+          <label className="row"><input type="checkbox" checked={saveProcessed} onChange={(e) => setSaveProcessed(e.target.checked)} disabled={running} /> Save processed copy when the action exports nothing</label></div>
+        <div className="text-mute">Original files are never changed; results are saved as new files. Steps that need a person cannot run in a batch.</div>
+        {running && <div data-testid="ba-progress">Processing {progress.i + 1} of {progress.n}: {progress.name}</div>}
+        {err && <div style={{ color: '#ff9a9a' }} data-testid="ba-error">{err}</div>}
+        {results && (
+          <div data-testid="ba-results">
+            <div data-testid="ba-summary">{ok} succeeded, {results.filter((r) => r.status === 'failed').length} failed, {results.filter((r) => r.status === 'skipped' || r.status === 'cancelled').length} not run</div>
+            <pre style={{ maxHeight: 110, overflow: 'auto', margin: 0, userSelect: 'text', fontSize: 11 }} data-testid="ba-log">{logText()}</pre>
+          </div>
+        )}
+        <div className="row" style={{ justifyContent: 'flex-end' }}>
+          {results && <button className="btn" data-testid="ba-save-log" onClick={() => void platform.saveFile({ suggestedName: 'batch-log', ext: 'txt', data: logText(), mime: 'text/plain', forceDialog: true })}>Save log</button>}
+          {results && outputs.length > 0 && <button className="btn btn-primary" data-testid="ba-save" onClick={async () => { const s = await platform.saveFiles(outputs); if (s) useUi.getState().notify(`Saved ${s.length} file(s)`); }}>Save {outputs.length} output file(s)…</button>}
+          {running ? <button className="btn" data-testid="ba-cancel" onClick={() => { signal.aborted = true; }}>Cancel</button> : <button className="btn" onClick={close}>Close</button>}
+          <button className="btn btn-primary" data-testid="ba-run" disabled={running || !action || files.length === 0} onClick={run}>Run batch</button>
         </div>
       </div>
     </Dlg>

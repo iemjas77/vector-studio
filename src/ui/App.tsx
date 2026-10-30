@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { AppContext, useApp } from './hooks';
-import { commandForKey, type App as AppApi } from './commands';
+import { commandForKey, parseShortcut, type App as AppApi } from './commands';
 import { Workspace } from './workspace';
 import { MenuBar } from './MenuBar';
 import { DocTabs } from './DocTabs';
@@ -14,11 +14,13 @@ import { ColorPanel } from './panels/Color';
 import { StrokePanel } from './panels/Stroke';
 import { LayersPanel } from './panels/Layers';
 import { AlignPanel } from './panels/Align';
+import { ActionsPanel } from './panels/Actions';
+import { actions } from './actions-service';
 import { TypographyPanel } from './panels/Typography';
 import { ArtboardsPanel } from './panels/Artboards';
 import { AboutDialog, ExportPngDialog, NewDocumentDialog, ShortcutsDialog } from './dialogs/Dialogs';
 import { useUi } from './store';
-import { BatchDialog, OffsetDialog, CleanupDialog, ColorsDialog, TraceDialog } from './dialogs/ToolDialogs';
+import { BatchActionsDialog, BatchDialog, OffsetDialog, CleanupDialog, ColorsDialog, TraceDialog } from './dialogs/ToolDialogs';
 import { platform } from '../platform';
 import { bootFonts } from './fonts-boot';
 import { listPlugins, podToolsPlugin, registerPlugin } from '../automation/plugin';
@@ -32,6 +34,7 @@ const PANELS = [
   { id: 'stroke', title: 'Stroke', el: <StrokePanel /> },
   { id: 'typography', title: 'Typography', el: <TypographyPanel /> },
   { id: 'align', title: 'Align', el: <AlignPanel /> },
+  { id: 'actions', title: 'Actions', el: <ActionsPanel /> },
   { id: 'layers', title: 'Layers', el: <LayersPanel /> },
   { id: 'artboards', title: 'Artboards', el: <ArtboardsPanel /> },
 ];
@@ -48,6 +51,7 @@ export function App() {
   useEffect(() => {
     // Read-only inspection hook used by the end-to-end tests.
     (window as unknown as { __vs: unknown }).__vs = { workspace: ws };
+    (window as unknown as { __vsActions: unknown }).__vsActions = actions;
   }, [ws]);
 
   useEffect(() => {
@@ -71,6 +75,10 @@ export function App() {
         e.preventDefault();
         void c.run(api);
         return;
+      }
+      if (!e.repeat) {
+        const act = actions.findByShortcut((spec) => { const s = parseShortcut(spec); const ctrl = e.ctrlKey || e.metaKey; const k = e.code.startsWith('Digit') ? e.code.slice(5) : e.code.startsWith('Key') ? e.code.slice(3).toLowerCase() : e.key.toLowerCase(); return s.key === k && s.ctrl === ctrl && s.shift === e.shiftKey && s.alt === e.altKey; });
+        if (act) { e.preventDefault(); void actions.run(ed, act); return; }
       }
       if (mods.ctrl) return;
       if (e.key.startsWith('Arrow')) {
@@ -153,6 +161,7 @@ function Shell() {
       {dialog === 'trace' && <TraceDialog />}
       {dialog === 'batch' && <BatchDialog />}
       {dialog === 'offset' && <OffsetDialog />}
+      {dialog === 'batchActions' && <BatchActionsDialog />}
     </div>
   );
 }
