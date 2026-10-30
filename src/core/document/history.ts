@@ -70,6 +70,13 @@ export class History<T> {
     return true;
   }
 
+  /** Inside a transaction: discard in-progress changes but stay in the transaction (for absolute-from-start drags). */
+  restoreBase(): void {
+    if (this.base === null || this._doc === this.base) return;
+    this._doc = this.base;
+    this.revision++;
+  }
+
   cancel(): void {
     if (this.base === null) return;
     this._doc = this.base;

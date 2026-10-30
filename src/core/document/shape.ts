@@ -1,3 +1,4 @@
+import { current, isDraft } from 'immer';
 import { ellipseToNodes, rectToNodes } from '../geometry/path';
 import type { PathNode } from '../geometry/types';
 import { newId } from './ids';
@@ -24,7 +25,7 @@ export function toPathElement(el: Element): PathElement | null {
 
 /** Deep clone with fresh ids. */
 export function cloneWithNewIds<T extends Element>(el: T): T {
-  const copy = structuredClone(el) as T;
+  const copy = structuredClone(isDraft(el) ? (current(el as Element) as T) : el);
   const walk = (e: Element) => { e.id = newId(); if (e.type === 'group') e.children.forEach(walk); };
   walk(copy);
   return copy;
