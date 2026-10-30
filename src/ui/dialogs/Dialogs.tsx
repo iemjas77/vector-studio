@@ -1,7 +1,9 @@
 import { useState, type ReactNode } from 'react';
 import { rasterSize } from '../../render/export';
 import { ARTBOARD_PRESETS } from '../panels/Artboards';
-import { exportPngFile, newDocumentFrom, SHORTCUT_LIST } from '../commands';
+import { newDocumentFrom, runExport, SHORTCUT_LIST } from '../commands';
+import { EXPORT_PRESETS, type ExportFormat } from '../export-presets';
+import { checkExport, physicalSize } from '../../core/io';
 import { useApp } from '../hooks';
 import { useUi } from '../store';
 
@@ -56,30 +58,78 @@ export function ExportPngDialog() {
   const ed = app.ed;
   const close = () => useUi.getState().openDialog(null);
   const [abId, setAbId] = useState(ed.activeArtboardId);
+  const [all, setAll] = useState(false);
   const ab = ed.doc.artboards.find((a) => a.id === abId) ?? ed.doc.artboards[0];
+  const [format, setFormat] = useState<ExportFormat>('png');
   const [mode, setMode] = useState<'scale' | 'width'>('scale');
   const [scale, setScale] = useState('1');
   const [width, setWidth] = useState(String(Math.round(ab.w)));
   const [transparent, setTransparent] = useState(ab.background === null);
+  const [quality, setQuality] = useState('92');
+  const [ppi, setPpi] = useState(String(ed.doc.ppi));
   const [busy, setBusy] = useState(false);
+  const raster = format === 'png' || format === 'jpeg';
   const opts = mode === 'scale' ? { scale: +scale } : { width: +width };
   const size = (() => { try { return rasterSize(ab, { ...opts, transparent }); } catch { return null; } })();
-  const valid = !!size && isFinite(size.w) && size.w >= 1 && size.h >= 1 && size.w <= 16384 && size.h <= 16384;
+  const sizeOk = !!size && isFinite(size.w) && size.w >= 1 && size.h >= 1 && size.w <= 16384 && size.h <= 16384;
+  const ppiNum = +ppi;
+  const ppiOk = isFinite(ppiNum) && ppiNum >= 1 && ppiNum <= 2400;
+  const qOk = +quality >= 1 && +quality <= 100;
+  const valid = (!raster || (sizeOk && ppiOk && (format !== 'jpeg' || qOk)));
+  const targets = all ? ed.doc.artboards : [ab];
+  const issues = targets.flatMap((a) => checkExport(ed.doc, a, { format, transparent }).map((i) => ({ ...i, text: targets.length > 1 ? `${a.name}: ${i.text}` : i.text })));
+  const phys = size && sizeOk && ppiOk ? physicalSize(size.w, size.h, ppiNum) : null;
+
+  const applyPreset = (id: string) => {
+    const p = EXPORT_PRESETS.find((x) => x.id === id);
+    if (!p) return;
+    setFormat(p.format);
+    if (p.width) { setMode('width'); setWidth(String(p.width)); } else { setMode('scale'); setScale(String(p.scale ?? 1)); }
+    if (p.transparent !== undefined) setTransparent(p.transparent);
+    if (p.quality) setQuality(String(Math.round(p.quality * 100)));
+    if (p.ppi) setPpi(String(p.ppi));
+  };
+
   return (
-    <Dialog title="Export PNG" onClose={close} testId="dialog-export">
-      <div className="flex flex-col gap-3">
-        <div className="row"><span style={{ width: 70 }}>Artboard</span>
-          <select data-testid="export-artboard" style={{ flex: 1 }} value={ab.id} onChange={(e) => { setAbId(e.target.value); const a = ed.doc.artboards.find((x) => x.id === e.target.value)!; setWidth(String(Math.round(a.w))); setTransparent(a.background === null); }}>
-            {ed.doc.artboards.map((a) => <option key={a.id} value={a.id}>{a.name} ({a.w}×{a.h})</option>)}
+    <Dialog title="Export" onClose={close} testId="dialog-export">
+      <div className="flex flex-col gap-3" style={{ minWidth: 420 }}>
+        <div className="row"><span style={{ width: 70 }}>Preset</span>
+          <select data-testid="export-preset" style={{ flex: 1 }} defaultValue="" onChange={(e) => applyPreset(e.target.value)}>
+            <option value="">Custom…</option>
+            {EXPORT_PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
           </select></div>
-        <div className="row"><span style={{ width: 70 }}>Size</span>
-          <select data-testid="export-mode" value={mode} onChange={(e) => setMode(e.target.value as 'scale' | 'width')}><option value="scale">Scale</option><option value="width">Width (px)</option></select>
-          {mode === 'scale' ? <>{numberInput(scale, setScale, 'export-scale', 60)}<span>×</span></> : numberInput(width, setWidth, 'export-width', 80)}</div>
-        <label className="row"><input type="checkbox" data-testid="export-transparent" checked={transparent} onChange={(e) => setTransparent(e.target.checked)} /> Transparent background</label>
-        <div data-testid="export-size" style={{ color: valid ? '#9a9a9a' : '#ff9a9a' }}>{valid ? `Output: ${size!.w} × ${size!.h} px` : 'Output size must be between 1 and 16384 px on each side.'}</div>
+        <div className="row"><span style={{ width: 70 }}>Format</span>
+          <select data-testid="export-format" value={format} onChange={(e) => setFormat(e.target.value as ExportFormat)}>
+            <option value="png">PNG</option><option value="jpeg">JPEG</option><option value="pdf">PDF (vector)</option><option value="svg">SVG (vector)</option>
+          </select>
+          {format === 'jpeg' && <><span>Quality</span>{numberInput(quality, setQuality, 'export-quality', 44)}<span>%</span></>}</div>
+        <div className="row"><span style={{ width: 70 }}>Artboard</span>
+          <select data-testid="export-artboard" style={{ flex: 1 }} disabled={all} value={ab.id} onChange={(e) => { setAbId(e.target.value); const a = ed.doc.artboards.find((x) => x.id === e.target.value)!; setWidth(String(Math.round(a.w))); setTransparent(a.background === null); }}>
+            {ed.doc.artboards.map((a) => <option key={a.id} value={a.id}>{a.name} ({a.w}×{a.h})</option>)}
+          </select>
+          {ed.doc.artboards.length > 1 && <label className="row"><input type="checkbox" data-testid="export-all" checked={all} onChange={(e) => setAll(e.target.checked)} /> All</label>}</div>
+        {raster && <>
+          <div className="row"><span style={{ width: 70 }}>Size</span>
+            <select data-testid="export-mode" value={mode} onChange={(e) => setMode(e.target.value as 'scale' | 'width')}><option value="scale">Scale</option><option value="width">Width (px)</option></select>
+            {mode === 'scale' ? <>{numberInput(scale, setScale, 'export-scale', 60)}<span>×</span></> : numberInput(width, setWidth, 'export-width', 80)}
+            <span>Resolution</span>{numberInput(ppi, setPpi, 'export-ppi', 50)}<span>ppi</span></div>
+          {format === 'png' && <label className="row"><input type="checkbox" data-testid="export-transparent" checked={transparent} onChange={(e) => setTransparent(e.target.checked)} /> Transparent background</label>}
+          <div data-testid="export-size" style={{ color: sizeOk ? '#9a9a9a' : '#ff9a9a' }}>
+            {sizeOk ? `Output: ${size!.w} × ${size!.h} px${phys ? ` · print size ${phys.inW.toFixed(2)} × ${phys.inH.toFixed(2)} in (${phys.cmW.toFixed(1)} × ${phys.cmH.toFixed(1)} cm) at ${ppiNum} ppi` : ''}` : 'Output size must be between 1 and 16384 px on each side.'}
+          </div>
+          {!ppiOk && <div style={{ color: '#ff9a9a' }} data-testid="export-ppi-error">Resolution must be between 1 and 2400 ppi.</div>}
+        </>}
+        {issues.length > 0 && <ul data-testid="export-issues" style={{ margin: 0, paddingLeft: 16, maxHeight: 120, overflow: 'auto' }}>
+          {issues.map((i, k) => <li key={k} style={{ color: i.level === 'warn' ? '#e0b341' : '#9a9a9a' }}>{i.text}</li>)}
+        </ul>}
         <div className="row" style={{ justifyContent: 'flex-end' }}>
           <button className="btn" onClick={close}>Cancel</button>
-          <button className="btn btn-primary" data-testid="export-go" disabled={!valid || busy} onClick={async () => { setBusy(true); const ok = await exportPngFile(app, ab, { ...opts, transparent }); setBusy(false); if (ok) close(); }}>Export</button>
+          <button className="btn btn-primary" data-testid="export-go" disabled={!valid || busy} onClick={async () => {
+            setBusy(true);
+            const ok = await runExport(app, { format, artboardIds: targets.map((a) => a.id), ...opts, transparent, quality: +quality / 100, ppi: ppiNum });
+            setBusy(false);
+            if (ok) close();
+          }}>Export{targets.length > 1 && format !== 'pdf' ? ` ${targets.length} files` : ''}</button>
         </div>
       </div>
     </Dialog>

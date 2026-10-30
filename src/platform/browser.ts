@@ -29,6 +29,16 @@ export const browserPlatform: Platform = {
       input.click();
     });
   },
+  async saveFiles(files) {
+    const saved: string[] = [];
+    for (const f of files) {
+      const dot = f.name.lastIndexOf('.');
+      const r = await browserPlatform.saveFile({ suggestedName: f.name.slice(0, dot), ext: f.name.slice(dot + 1), data: f.data, mime: f.mime });
+      if (r) saved.push(r.name);
+      await new Promise((res) => setTimeout(res, 150)); // browsers drop downloads that fire in the same tick
+    }
+    return saved;
+  },
   async saveFile(req: SaveRequest) {
     const name = req.suggestedName.endsWith('.' + req.ext) ? req.suggestedName : `${req.suggestedName}.${req.ext}`;
     const blob = new Blob([req.data as BlobPart], { type: req.mime });

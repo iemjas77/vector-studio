@@ -11,6 +11,8 @@ export interface RasterOptions {
   height?: number;
   /** Ignore the artboard background and export with alpha. */
   transparent?: boolean;
+  /** Composite onto this solid colour (for formats without alpha, e.g. JPEG). */
+  flatten?: string;
 }
 
 export const MAX_RASTER_PIXELS = 16384 * 16384;
@@ -34,5 +36,10 @@ export function rasterizeArtboard(doc: VDocument, artboard: Artboard, make: Canv
   if (w > 16384 || h > 16384 || w * h > MAX_RASTER_PIXELS) throw new Error(`Export size ${w}×${h} is too large`);
   const target = make(w, h);
   renderArtboard(target.ctx, doc, artboard, w / artboard.w, { makeCanvas: make }, { transparent: o.transparent, pixelWidth: w, pixelHeight: h });
-  return target;
+  if (!o.flatten) return target;
+  const flat = make(w, h);
+  flat.ctx.fillStyle = o.flatten;
+  flat.ctx.fillRect(0, 0, w, h);
+  flat.ctx.drawImage(target.canvas as unknown as CanvasImageSource, 0, 0);
+  return flat;
 }

@@ -21,6 +21,8 @@ export interface Platform {
   kind: 'electron' | 'browser';
   openTextFile(accept: string[]): Promise<OpenedFile | null>;
   saveFile(req: SaveRequest): Promise<{ name: string; path?: string } | null>;
+  /** Save several files at once (batch export). Electron asks for one folder; browsers download them one after another. Returns the saved names. */
+  saveFiles(files: { name: string; data: string | Uint8Array; mime: string }[]): Promise<string[] | null>;
   /** Called when the window is about to close; return true to allow. Only used by Electron. */
   onCloseRequest?(handler: () => Promise<boolean>): void;
 }

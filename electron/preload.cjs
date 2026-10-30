@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('vsElectron', {
   openTextFile: (accept) => ipcRenderer.invoke('vs:open', accept),
   saveFile: (req) => ipcRenderer.invoke('vs:save', req),
+  saveFiles: (files) => ipcRenderer.invoke('vs:saveMany', files),
   onCloseRequest: (handler) => {
     ipcRenderer.removeAllListeners('vs:close-request');
     ipcRenderer.on('vs:close-request', async () => {

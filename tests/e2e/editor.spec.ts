@@ -440,3 +440,61 @@ test('rulers: drag a guide from the ruler, snap a new shape to it, toggle rulers
   await page.getByTestId('menu-view.rulers').click();
   expect(await page.evaluate(() => (window as unknown as { __vs: { workspace: { current: { showRulers: boolean } } } }).__vs.workspace.current.showRulers)).toBe(false);
 });
+
+test('export presets and formats: POD preset writes 300 ppi PNG; JPEG; multi-page PDF; batch of all artboards', async ({ page }, info) => {
+  test.setTimeout(120000);
+  const fs = await import('node:fs');
+  const { execFileSync } = await import('node:child_process');
+  const { readPngPpi, readJpegPpi } = await import('../../src/core/io');
+  await page.keyboard.press('Control+n');
+  await page.getByTestId('new-w').fill('600'); await page.getByTestId('new-h').fill('800');
+  await page.getByTestId('new-create').click();
+  await page.keyboard.press('m'); await page.getByTestId('swatch-ff0000').click();
+  await dragDoc(page, 50, 50, 300, 300);
+  await page.getByTestId('artboard-preset').selectOption({ index: 2 });
+  await page.getByTestId('artboard-add').click();           // second artboard 1920×1080
+
+  // 1) POD preset on the first artboard
+  await page.getByTestId('artboard-row-0').click();
+  await page.keyboard.press('Control+Shift+e');
+  await page.getByTestId('export-preset').selectOption('pod-tee');
+  await expect(page.getByTestId('export-size')).toContainText('4500 × 6000');
+  await expect(page.getByTestId('export-size')).toContainText('15.00 × 20.00 in');
+  let [dl] = await Promise.all([page.waitForEvent('download', { timeout: 60000 }), page.getByTestId('export-go').click()]);
+  let out = info.outputPath('pod.png'); await dl.saveAs(out);
+  expect(readPngPpi(new Uint8Array(fs.readFileSync(out)))).toBe(300);
+
+  // 2) JPEG
+  await page.keyboard.press('Control+Shift+e');
+  await page.getByTestId('export-format').selectOption('jpeg');
+  await expect(page.getByTestId('export-issues')).toContainText('JPEG has no transparency');
+  await page.getByTestId('export-preset').selectOption('jpeg-hi');
+  [dl] = await Promise.all([page.waitForEvent('download'), page.getByTestId('export-go').click()]);
+  out = info.outputPath('x.jpg'); await dl.saveAs(out);
+  const jpg = new Uint8Array(fs.readFileSync(out));
+  expect([jpg[0], jpg[1]]).toEqual([0xff, 0xd8]);
+  expect(readJpegPpi(jpg)).toBe(300);
+  expect(dl.suggestedFilename()).toMatch(/\.jpg$/);
+
+  // 3) PDF with all artboards → one 2-page file
+  await page.keyboard.press('Control+Shift+e');
+  await page.getByTestId('export-format').selectOption('pdf');
+  await page.getByTestId('export-all').check();
+  [dl] = await Promise.all([page.waitForEvent('download'), page.getByTestId('export-go').click()]);
+  out = info.outputPath('x.pdf'); await dl.saveAs(out);
+  const pdfinfo = execFileSync('pdfinfo', [out]).toString();
+  expect(pdfinfo).toMatch(/Pages:\s+2/);
+  expect(pdfinfo).toMatch(/Page\s+1 size:|Page size:/);
+
+  // 4) Batch PNG: two artboards → two downloads
+  await page.keyboard.press('Control+Shift+e');
+  await page.getByTestId('export-format').selectOption('png');
+  await page.getByTestId('export-all').check();
+  await page.getByTestId('export-width').count();
+  const names: string[] = [];
+  page.on('download', (d) => names.push(d.suggestedFilename()));
+  await page.getByTestId('export-go').click();
+  await expect.poll(() => names.length, { timeout: 30000 }).toBe(2);
+  expect(new Set(names).size).toBe(2);
+  expect(names.every((n) => n.endsWith('.png'))).toBe(true);
+});

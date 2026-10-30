@@ -1,8 +1,8 @@
 import { createDocument, getElement, insertCopies, parseDocument, serializeDocument, DocumentFormatError, type Artboard, type VDocument } from '../core/document';
-import { exportSvg, importSvg } from '../core/io';
+import { exportPdf, exportSvg, importSvg } from '../core/io';
 import { Editor } from '../editor/editor';
 import type { ToolId } from '../editor/types';
-import { exportPng } from '../render/browser-export';
+import { exportImage } from '../render/browser-export';
 import { platform } from '../platform';
 import { useUi } from './store';
 import type { Workspace } from './workspace';
@@ -115,18 +115,50 @@ export async function exportSvgFile(app: App, artboard: Artboard = app.ed.active
   }
 }
 
-export async function exportPngFile(app: App, artboard: Artboard, opts: { scale?: number; width?: number; height?: number; transparent?: boolean }): Promise<boolean> {
+export interface ExportSpec {
+  format: 'png' | 'jpeg' | 'pdf' | 'svg';
+  artboardIds: string[];
+  scale?: number;
+  width?: number;
+  transparent: boolean;
+  quality: number;
+  ppi: number;
+}
+
+const safeName = (s: string) => s.replace(/[^\w.\- ]+/g, '_').trim() || 'artboard';
+
+/** Exports the chosen artboards. One file → save dialog; several → batch save. Returns true if anything was saved. */
+export async function runExport(app: App, spec: ExportSpec): Promise<boolean> {
   const ed = app.ed;
+  const abs = ed.doc.artboards.filter((a) => spec.artboardIds.includes(a.id));
+  if (abs.length === 0) { notify('Nothing to export: no artboard selected', 'error'); return false; }
+  const base = safeName(baseName(ed.fileName ?? ed.doc.name));
   try {
-    const out = await exportPng(ed.doc, artboard, opts);
-    const res = await platform.saveFile({
-      suggestedName: `${baseName(ed.fileName ?? ed.doc.name)}${ed.doc.artboards.length > 1 ? '-' + artboard.name : ''}`,
-      data: out.bytes, mime: 'image/png', ext: 'png', forceDialog: true,
-    });
-    if (res) notify(`Exported ${res.name} (${out.width}×${out.height}px)`);
-    return !!res;
+    const files: { name: string; data: string | Uint8Array; mime: string }[] = [];
+    if (spec.format === 'pdf') {
+      files.push({ name: `${base}.pdf`, data: exportPdf(ed.doc, abs), mime: 'application/pdf' });
+    } else {
+      for (const ab of abs) {
+        const name = abs.length > 1 || ed.doc.artboards.length > 1 ? `${base}-${safeName(ab.name)}` : base;
+        if (spec.format === 'svg') files.push({ name: `${name}.svg`, data: exportSvg(ed.doc, ab), mime: 'image/svg+xml' });
+        else {
+          const out = await exportImage(ed.doc, ab, { format: spec.format, scale: spec.scale, width: spec.width, transparent: spec.transparent, quality: spec.quality, ppi: spec.ppi });
+          files.push({ name: `${name}.${spec.format === 'jpeg' ? 'jpg' : 'png'}`, data: out.bytes, mime: spec.format === 'jpeg' ? 'image/jpeg' : 'image/png' });
+        }
+      }
+    }
+    if (files.length === 1) {
+      const f = files[0];
+      const dot = f.name.lastIndexOf('.');
+      const res = await platform.saveFile({ suggestedName: f.name.slice(0, dot), ext: f.name.slice(dot + 1), data: f.data, mime: f.mime, forceDialog: true });
+      if (res) notify(`Exported ${res.name}`);
+      return !!res;
+    }
+    const saved = await platform.saveFiles(files);
+    if (saved) notify(`Exported ${saved.length} files`);
+    return !!saved;
   } catch (e) {
-    notify(`PNG export failed: ${(e as Error).message}`, 'error');
+    notify(`Export failed: ${(e as Error).message}`, 'error');
     return false;
   }
 }
@@ -143,7 +175,7 @@ export const COMMANDS: Command[] = [
   { id: 'file.importSvg', label: 'Open SVG…', run: (a) => importSvgFile(a, false) },
   { id: 'file.placeSvg', label: 'Place SVG…', run: (a) => importSvgFile(a, true) },
   { id: 'file.exportSvg', label: 'Export Artboard as SVG…', run: (a) => exportSvgFile(a) },
-  { id: 'file.exportPng', label: 'Export Artboard as PNG…', shortcut: 'Ctrl+Shift+E', run: () => useUi.getState().openDialog('export') },
+  { id: 'file.exportPng', label: 'Export…', shortcut: 'Ctrl+Shift+E', run: () => useUi.getState().openDialog('export') },
   { id: 'file.close', label: 'Close Tab', shortcut: 'Ctrl+W', run: (a) => closeTab(a, a.ws.active) },
 
   { id: 'edit.undo', label: 'Undo', shortcut: 'Ctrl+Z', enabled: (a) => a.ed.history.canUndo, run: (a) => a.ed.undo() },

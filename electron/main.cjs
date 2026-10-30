@@ -65,6 +65,24 @@ ipcMain.handle('vs:save', async (_e, req) => {
   return { name: path.basename(target), path: target };
 });
 
+ipcMain.handle('vs:saveMany', async (_e, files) => {
+  const res = await dialog.showOpenDialog({ title: 'Choose a folder for the exported files', properties: ['openDirectory', 'createDirectory'] });
+  if (res.canceled || res.filePaths.length === 0) return null;
+  const dir = res.filePaths[0];
+  const saved = [];
+  for (const f of files) {
+    // Only the base name is used so a crafted name cannot escape the chosen folder; never overwrite existing files.
+    const base = path.basename(String(f.name)).replace(/[<>:"/\\|?*\x00-\x1f]/g, '_') || 'export';
+    const ext = path.extname(base);
+    const stem = base.slice(0, base.length - ext.length);
+    let target = path.join(dir, base);
+    for (let i = 1; fs.existsSync(target); i++) target = path.join(dir, `${stem}-${i}${ext}`);
+    fs.writeFileSync(target, typeof f.data === 'string' ? f.data : Buffer.from(f.data));
+    saved.push(path.basename(target));
+  }
+  return saved;
+});
+
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
   createWindow();
