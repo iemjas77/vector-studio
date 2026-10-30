@@ -675,3 +675,15 @@ test('Batch Resize & Export writes one correctly sized file per size; Plugins me
   const dims = saved.map((p) => { const png = PNG.sync.read(fs.readFileSync(p)); return [png.width, png.height]; }).sort();
   expect(dims).toEqual([[200, 400], [500, 500]]);
 });
+
+test('bleed field grows the output size and PDF export offers it', async ({ page }) => {
+  await page.keyboard.press('Control+n'); await page.getByTestId('new-w').fill('300'); await page.getByTestId('new-h').fill('200'); await page.getByTestId('new-create').click();
+  await page.keyboard.press('Control+Shift+e');
+  await expect(page.getByTestId('export-size')).toContainText('300 × 200');
+  await page.getByTestId('export-bleed').fill('25');
+  await expect(page.getByTestId('export-size')).toContainText('350 × 250');
+  await page.getByTestId('export-format').selectOption('pdf');
+  await expect(page.getByTestId('export-bleed')).toBeVisible();
+  await page.getByTestId('export-bleed').fill('-3');
+  await expect(page.getByTestId('export-go')).toBeEnabled();   // negative input is treated as 0, not an error
+});

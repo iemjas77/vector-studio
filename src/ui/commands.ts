@@ -123,6 +123,7 @@ export interface ExportSpec {
   transparent: boolean;
   quality: number;
   ppi: number;
+  bleed?: number;
 }
 
 const safeName = (s: string) => s.replace(/[^\w.\- ]+/g, '_').trim() || 'artboard';
@@ -136,13 +137,13 @@ export async function runExport(app: App, spec: ExportSpec): Promise<boolean> {
   try {
     const files: { name: string; data: string | Uint8Array; mime: string }[] = [];
     if (spec.format === 'pdf') {
-      files.push({ name: `${base}.pdf`, data: exportPdf(ed.doc, abs), mime: 'application/pdf' });
+      files.push({ name: `${base}.pdf`, data: exportPdf(ed.doc, abs, { bleed: spec.bleed }), mime: 'application/pdf' });
     } else {
       for (const ab of abs) {
         const name = abs.length > 1 || ed.doc.artboards.length > 1 ? `${base}-${safeName(ab.name)}` : base;
         if (spec.format === 'svg') files.push({ name: `${name}.svg`, data: exportSvg(ed.doc, ab), mime: 'image/svg+xml' });
         else {
-          const out = await exportImage(ed.doc, ab, { format: spec.format, scale: spec.scale, width: spec.width, transparent: spec.transparent, quality: spec.quality, ppi: spec.ppi });
+          const out = await exportImage(ed.doc, ab, { format: spec.format, scale: spec.scale, width: spec.width, transparent: spec.transparent, quality: spec.quality, ppi: spec.ppi, bleed: spec.bleed });
           files.push({ name: `${name}.${spec.format === 'jpeg' ? 'jpg' : 'png'}`, data: out.bytes, mime: spec.format === 'jpeg' ? 'image/jpeg' : 'image/png' });
         }
       }

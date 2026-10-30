@@ -133,8 +133,14 @@ const latin1 = (s: string) => {
 };
 
 /** Exports the given artboards (default: all) as a multi-page PDF. 1 document unit = 1/ppi inch. */
-export function exportPdf(doc: VDocument, artboards: Artboard[] = doc.artboards): Uint8Array {
+export interface PdfOptions {
+  /** Extra area beyond the artboard on every side, in document units. The artboard becomes the TrimBox. */
+  bleed?: number;
+}
+
+export function exportPdf(doc: VDocument, artboards: Artboard[] = doc.artboards, opts: PdfOptions = {}): Uint8Array {
   const scale = 72 / doc.ppi;
+  const bleed = Math.max(0, opts.bleed ?? 0);
   const objects: string[] = [];
   const reserve = () => objects.push('') ;
   const set = (n: number, body: string) => { objects[n - 1] = body; };
@@ -143,9 +149,11 @@ export function exportPdf(doc: VDocument, artboards: Artboard[] = doc.artboards)
 
   for (const ab of artboards) {
     const ctx: Ctx = { ops: [], gsNames: new Map(), shadings: [] };
-    const W = ab.w * scale, H = ab.h * scale;
-    ctx.ops.push(`q\n0 0 ${f(W)} ${f(H)} re W n\n${f(scale)} 0 0 ${f(-scale)} ${f(-ab.x * scale)} ${f(H + ab.y * scale)} cm\n`);
-    if (ab.background) ctx.ops.push(`${rgb(ab.background)} rg\n${f(ab.x)} ${f(ab.y)} ${f(ab.w)} ${f(ab.h)} re f\n`);
+    const B = bleed * scale;
+    const W = ab.w * scale + 2 * B, H = ab.h * scale + 2 * B;
+    // Page origin is the bleed corner; document point (ab.x - bleed, ab.y - bleed) maps to the page's top-left.
+    ctx.ops.push(`q\n0 0 ${f(W)} ${f(H)} re W n\n${f(scale)} 0 0 ${f(-scale)} ${f(-(ab.x - bleed) * scale)} ${f(H + (ab.y - bleed) * scale)} cm\n`);
+    if (ab.background) ctx.ops.push(`${rgb(ab.background)} rg\n${f(ab.x - bleed)} ${f(ab.y - bleed)} ${f(ab.w + 2 * bleed)} ${f(ab.h + 2 * bleed)} re f\n`);
     for (const layer of doc.layers) {
       if (!layer.visible) continue;
       for (const el of layer.children) drawElement(ctx, el, 1);
@@ -158,7 +166,7 @@ export function exportPdf(doc: VDocument, artboards: Artboard[] = doc.artboards)
     const gsDict = [...ctx.gsNames.entries()].map(([k, n]) => { const [ca, CA] = k.split('/'); return `/${n} << /Type /ExtGState /ca ${ca} /CA ${CA} >>`; }).join(' ');
     const shDict = ctx.shadings.map((d, i) => `/Sh${i + 1} ${d}`).join(' ');
     set(contentId, `<< /Length ${content.length} >>\nstream\n${content}endstream`);
-    set(pageId, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${f(W)} ${f(H)}] /Contents ${contentId} 0 R /Resources << /ExtGState << ${gsDict} >> /Shading << ${shDict} >> >> >>`);
+    set(pageId, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${f(W)} ${f(H)}]${bleed > 0 ? ` /BleedBox [0 0 ${f(W)} ${f(H)}] /TrimBox [${f(B)} ${f(B)} ${f(W - B)} ${f(H - B)}]` : ''} /Contents ${contentId} 0 R /Resources << /ExtGState << ${gsDict} >> /Shading << ${shDict} >> >> >>`);
   }
   set(1, '<< /Type /Catalog /Pages 2 0 R >>');
   set(2, `<< /Type /Pages /Kids [${pageIds.map((i) => `${i} 0 R`).join(' ')}] /Count ${pageIds.length} >>`);

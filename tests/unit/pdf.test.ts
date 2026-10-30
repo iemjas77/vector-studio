@@ -108,3 +108,23 @@ d('PDF export (verified by rasterising with poppler)', () => {
     expect(execFileSync('pdfinfo', [join(dir, 'a.pdf')]).toString()).toMatch(/Page size:\s+72 x 36 pts/);
   });
 });
+
+d('PDF bleed / trim', () => {
+  it('MediaBox grows by the bleed on every side; TrimBox is the artboard; artwork extends into the bleed', () => {
+    const doc = createDocument('d', 200, 100);
+    doc.artboards[0].background = '#336699';
+    addElement(doc, createRect(-20, 30, 240, 40, { fill: solid('#ff0000'), stroke: null })); // runs 20 units past both sides
+    const dir = mkdtempSync(join(tmpdir(), 'vs-pdf-'));
+    writeFileSync(join(dir, 'a.pdf'), exportPdf(doc, undefined, { bleed: 10 }));
+    const info = execFileSync('pdfinfo', ['-box', join(dir, 'a.pdf')]).toString();
+    expect(info).toMatch(/Page size:\s+220 x 120 pts/);
+    expect(info).toMatch(/TrimBox:\s+10\.00\s+10\.00\s+210\.00\s+110\.00/);
+    expect(info).toMatch(/BleedBox:\s+0\.00\s+0\.00\s+220\.00\s+120\.00/);
+    execFileSync('pdftoppm', ['-png', '-r', '72', '-singlefile', join(dir, 'a.pdf'), join(dir, 'o')]);
+    const png = PNG.sync.read(readFileSync(join(dir, 'o.png')));
+    const px = (x: number, y: number) => [...png.data.slice((png.width * y + x) * 4, (png.width * y + x) * 4 + 3)];
+    expect(px(3, 3)).toEqual([0x33, 0x66, 0x99]);       // background extends into the bleed corner
+    expect(px(3, 60)).toEqual([255, 0, 0]);             // the red bar reaches the page edge
+    expect(px(110, 60)).toEqual([255, 0, 0]);
+  });
+});

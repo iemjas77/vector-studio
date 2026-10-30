@@ -70,3 +70,19 @@ describe('export pre-flight checks', () => {
     expect(s.cmW).toBeCloseTo(38.1);
   });
 });
+
+describe('raster bleed', () => {
+  it('grows the output by the bleed and includes content outside the artboard', () => {
+    const doc = createDocument('d', 100, 100);
+    doc.artboards[0].background = null;
+    addElement(doc, createRect(-10, 40, 120, 20, { fill: solid('#ff0000'), stroke: null }));
+    const off = rasterizeArtboard(doc, doc.artboards[0], make, { bleed: 10 });
+    const c = off.canvas as unknown as { width: number; height: number };
+    expect([c.width, c.height]).toEqual([120, 120]);
+    const d = (off.ctx as unknown as { getImageData(x: number, y: number, w: number, h: number): { data: Uint8ClampedArray } }).getImageData(0, 0, 120, 120).data;
+    const a = (x: number, y: number) => d[(120 * y + x) * 4 + 3];
+    expect(a(2, 60)).toBe(255);   // bar reaches into the left bleed
+    expect(a(117, 60)).toBe(255); // and the right bleed
+    expect(a(2, 5)).toBe(0);
+  });
+});

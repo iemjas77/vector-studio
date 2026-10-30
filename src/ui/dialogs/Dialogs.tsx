@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { rasterSize } from '../../render/export';
+import { rasterSize, withBleed } from '../../render/export';
 import { ARTBOARD_PRESETS } from '../panels/Artboards';
 import { TEMPLATES } from '../templates';
 import { newDocumentFrom, runExport, SHORTCUT_LIST } from '../commands';
@@ -79,15 +79,18 @@ export function ExportPngDialog() {
   const [transparent, setTransparent] = useState(ab.background === null);
   const [quality, setQuality] = useState('92');
   const [ppi, setPpi] = useState(String(ed.doc.ppi));
+  const [bleed, setBleed] = useState('0');
+  const bleedNum = Math.max(0, +bleed || 0);
+  const bleedOk = isFinite(+bleed) && +bleed >= 0 && +bleed <= 1000;
   const [busy, setBusy] = useState(false);
   const raster = format === 'png' || format === 'jpeg';
   const opts = mode === 'scale' ? { scale: +scale } : { width: +width };
-  const size = (() => { try { return rasterSize(ab, { ...opts, transparent }); } catch { return null; } })();
+  const size = (() => { try { return rasterSize(withBleed(ab, bleedNum), { ...opts, transparent }); } catch { return null; } })();
   const sizeOk = !!size && isFinite(size.w) && size.w >= 1 && size.h >= 1 && size.w <= 16384 && size.h <= 16384;
   const ppiNum = +ppi;
   const ppiOk = isFinite(ppiNum) && ppiNum >= 1 && ppiNum <= 2400;
   const qOk = +quality >= 1 && +quality <= 100;
-  const valid = (!raster || (sizeOk && ppiOk && (format !== 'jpeg' || qOk)));
+  const valid = bleedOk && (!raster || (sizeOk && ppiOk && (format !== 'jpeg' || qOk)));
   const targets = all ? ed.doc.artboards : [ab];
   const issues = targets.flatMap((a) => checkExport(ed.doc, a, { format, transparent }).map((i) => ({ ...i, text: targets.length > 1 ? `${a.name}: ${i.text}` : i.text })));
   const phys = size && sizeOk && ppiOk ? physicalSize(size.w, size.h, ppiNum) : null;
@@ -120,6 +123,9 @@ export function ExportPngDialog() {
             {ed.doc.artboards.map((a) => <option key={a.id} value={a.id}>{a.name} ({a.w}×{a.h})</option>)}
           </select>
           {ed.doc.artboards.length > 1 && <label className="row"><input type="checkbox" data-testid="export-all" checked={all} onChange={(e) => setAll(e.target.checked)} /> All</label>}</div>
+        {(raster || format === 'pdf') && (
+          <div className="row"><span style={{ width: 70 }}>Bleed</span>{numberInput(bleed, setBleed, 'export-bleed', 50)}<span>units on every side{format === 'pdf' ? ' (PDF TrimBox marks the finished size)' : ' (crop to the artboard size at the printer)'}</span></div>
+        )}
         {raster && <>
           <div className="row"><span style={{ width: 70 }}>Size</span>
             <select data-testid="export-mode" value={mode} onChange={(e) => setMode(e.target.value as 'scale' | 'width')}><option value="scale">Scale</option><option value="width">Width (px)</option></select>
@@ -138,7 +144,7 @@ export function ExportPngDialog() {
           <button className="btn" onClick={close}>Cancel</button>
           <button className="btn btn-primary" data-testid="export-go" disabled={!valid || busy} onClick={async () => {
             setBusy(true);
-            const ok = await runExport(app, { format, artboardIds: targets.map((a) => a.id), ...opts, transparent, quality: +quality / 100, ppi: ppiNum });
+            const ok = await runExport(app, { format, artboardIds: targets.map((a) => a.id), ...opts, transparent, quality: +quality / 100, ppi: ppiNum, bleed: bleedNum });
             setBusy(false);
             if (ok) close();
           }}>Export{targets.length > 1 && format !== 'pdf' ? ` ${targets.length} files` : ''}</button>
