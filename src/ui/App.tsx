@@ -1,4 +1,5 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import { layout } from './layout-service';
 import { AppContext, useApp } from './hooks';
 import { commandForKey, parseShortcut, type App as AppApi } from './commands';
 import { Workspace } from './workspace';
@@ -59,6 +60,7 @@ export function App() {
     // Read-only inspection hook used by the end-to-end tests.
     (window as unknown as { __vs: unknown }).__vs = { workspace: ws };
     (window as unknown as { __vsActions: unknown }).__vsActions = actions;
+    (window as unknown as { __vsLayout: unknown }).__vsLayout = layout;
   }, [ws]);
 
   useEffect(() => {
@@ -131,8 +133,7 @@ function Shell() {
   const toast = useUi((s) => s.toast);
   const warnings = useUi((s) => s.warnings);
   const setWarnings = useUi((s) => s.setWarnings);
-  const collapsed = useUi((s) => s.collapsed);
-  const toggle = useUi((s) => s.toggleSection);
+  useSyncExternalStore((f) => layout.subscribe(f), () => layout.version);
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => { if (useUi.getState().toast?.id === toast.id) useUi.setState({ toast: null }); }, toast.kind === 'error' ? 8000 : 3500);
@@ -148,7 +149,10 @@ function Shell() {
         <Toolbar />
         <CanvasView key={app.ws.active} />
         <aside className="bg-panel border-l border-edge overflow-y-auto" style={{ width: 292 }} data-testid="panels">
-          {PANELS.map((p) => <Section key={p.id} id={p.id} title={p.title} collapsed={!!collapsed[p.id]} onToggle={() => toggle(p.id)}>{p.el}</Section>)}
+          {layout.current.panels.map((id) => PANELS.find((p) => p.id === id)).filter((p): p is (typeof PANELS)[number] => !!p).map((p) => (
+            <Section key={p.id} id={p.id} title={p.title} collapsed={layout.isCollapsed(p.id)} onToggle={() => layout.toggleCollapsed(p.id)} onMove={(d) => layout.move(p.id, d)}>{p.el}</Section>
+          ))}
+          {layout.current.panels.length === 0 && <div className="p-3 text-mute" data-testid="no-panels">No panels are shown. Use the Window menu to show panels or pick a workspace.</div>}
         </aside>
       </div>
       <StatusBar />

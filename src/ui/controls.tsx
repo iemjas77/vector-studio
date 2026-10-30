@@ -43,11 +43,15 @@ export function NumField({ value, onCommit, min, max, step = 1, width = 64, unit
   );
 }
 
-export function Section({ id, title, collapsed, onToggle, children }: { id: string; title: string; collapsed: boolean; onToggle(): void; children: ReactNode }) {
+export function Section({ id, title, collapsed, onToggle, onMove, children }: { id: string; title: string; collapsed: boolean; onToggle(): void; onMove?(delta: -1 | 1): void; children: ReactNode }) {
   return (
     <section data-testid={`panel-${id}`} className="border-b border-edge">
       <div className="panel-head" onClick={onToggle} role="button" aria-expanded={!collapsed}>
-        <span style={{ width: 10 }}>{collapsed ? '▸' : '▾'}</span>{title}
+        <span style={{ width: 10 }}>{collapsed ? '▸' : '▾'}</span><span style={{ flex: 1 }}>{title}</span>
+        {onMove && <>
+          <button className="icon-btn" style={{ width: 18, height: 18 }} aria-label={`Move ${title} up`} data-testid={`panel-up-${id}`} onClick={(e) => { e.stopPropagation(); onMove(-1); }}>↑</button>
+          <button className="icon-btn" style={{ width: 18, height: 18 }} aria-label={`Move ${title} down`} data-testid={`panel-down-${id}`} onClick={(e) => { e.stopPropagation(); onMove(1); }}>↓</button>
+        </>}
       </div>
       {!collapsed && <div className="p-2">{children}</div>}
     </section>

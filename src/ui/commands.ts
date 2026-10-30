@@ -6,6 +6,7 @@ import { exportImage } from '../render/browser-export';
 import { platform } from '../platform';
 import { useUi } from './store';
 import { actions } from './actions-service';
+import { layout } from './layout-service';
 import { eventToShortcut, Keymap, normalizeShortcut, type KeyEventLike } from './keymap';
 import type { Workspace } from './workspace';
 
@@ -222,6 +223,15 @@ export const COMMANDS: Command[] = [
   { id: 'object.toPath', label: 'Convert to Path', enabled: (a) => a.ed.selection.some((id) => { const t = getElement(a.ed.doc, id)?.type; return t === 'rect' || t === 'ellipse'; }), run: (a) => a.ed.convertSelectionToPaths() },
   { id: 'object.expandStroke', label: 'Expand Stroke', enabled: (a) => a.ed.selectedElements.some((e) => e.type !== 'group' && !!e.stroke && e.stroke.width > 0), run: (a) => doStep(a, 'expandStroke') },
   { id: 'object.offsetPath', label: 'Offset Path…', enabled: hasSel, run: () => useUi.getState().openDialog('offset') },
+  { id: 'select.sameFill', label: 'Same Fill', enabled: hasSel, run: (a) => { const id = a.ed.selection[0]; if (id) a.ed.selectSimilar(id, 'fill'); } },
+  { id: 'select.sameStroke', label: 'Same Stroke', enabled: hasSel, run: (a) => { const id = a.ed.selection[0]; if (id) a.ed.selectSimilar(id, 'stroke'); } },
+  { id: 'select.allText', label: 'All Text Objects', run: (a) => doStep(a, 'selectByType', { types: ['text'] }) },
+  { id: 'select.allPaths', label: 'All Paths', run: (a) => doStep(a, 'selectByType', { types: ['path'] }) },
+  { id: 'effect.dropShadow', label: 'Drop Shadow', enabled: hasSel, run: (a) => doStep(a, 'addEffect', { effect: { type: 'dropShadow', dx: 6, dy: 6, blur: 8, color: '#000000', alpha: 0.5 } }) },
+  { id: 'effect.outerGlow', label: 'Outer Glow', enabled: hasSel, run: (a) => doStep(a, 'addEffect', { effect: { type: 'outerGlow', blur: 12, color: '#ffd400', alpha: 0.8 } }) },
+  { id: 'effect.blur', label: 'Gaussian Blur', enabled: hasSel, run: (a) => doStep(a, 'addEffect', { effect: { type: 'blur', radius: 4 } }) },
+  { id: 'effect.clear', label: 'Remove Live Effects', enabled: (a) => a.ed.selectedElements.some((e) => !!e.effects?.length), run: (a) => doStep(a, 'clearEffects') },
+  { id: 'type.panel', label: 'Show Typography Panel', run: () => layout.show('typography', true) },
   { id: 'object.cleanup', label: 'Clean Up Vectors…', run: () => useUi.getState().openDialog('cleanup') },
   { id: 'object.colors', label: 'Reduce / Replace Colors…', run: () => useUi.getState().openDialog('colors') },
   { id: 'object.swap', label: 'Swap Fill and Stroke', shortcut: 'Shift+X', run: (a) => a.ed.swapFillStroke() },

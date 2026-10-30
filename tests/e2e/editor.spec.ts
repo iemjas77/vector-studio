@@ -523,7 +523,7 @@ test('Type tool: create text, type into the Typography panel (one undo step), st
   expect(el.content).toBe('Text');
   await page.keyboard.press('Control+Shift+z'); await page.keyboard.press('Control+Shift+z'); await page.keyboard.press('Control+Shift+z'); await page.keyboard.press('Control+Shift+z');
   expect(((await elements(page))[0] as never as { content: string }).content).toBe('Hello World');
-  await page.getByRole('menubar').getByText('Object', { exact: true }).click();
+  await page.getByRole('menubar').getByText('Type', { exact: true }).click();
   await page.getByTestId('menu-object.outlines').click();
   const out = (await elements(page))[0] as unknown as { type: string; extra: unknown[] };
   expect(out.type).toBe('path');
@@ -572,14 +572,14 @@ test('Make Text on Path from the Object menu', async ({ page }) => {
   await page.keyboard.press('Escape');
   await page.keyboard.press('v');
   await page.keyboard.press('Control+a');
-  await page.getByRole('menubar').getByText('Object', { exact: true }).click();
+  await page.getByRole('menubar').getByText('Type', { exact: true }).click();
   await page.getByTestId('menu-object.textOnPath').click();
   const els = await elements(page);
   expect(els).toHaveLength(1);
   const t = els[0] as unknown as { type: string; path: { nodes: unknown[] } | null };
   expect(t.type).toBe('text');
   expect(t.path?.nodes.length).toBe(3);
-  await page.getByRole('menubar').getByText('Object', { exact: true }).click();
+  await page.getByRole('menubar').getByText('Type', { exact: true }).click();
   await page.getByTestId('menu-object.releaseTextPath').click();
   expect((await elements(page))).toHaveLength(2);
 });
@@ -997,4 +997,49 @@ test('Appearance and Transparency panels: add/edit/remove live effects, blend mo
   await expect.poll(() => docOf(page)).toEqual(original);
   await page.keyboard.press('Control+a');
   await expect(page.getByTestId('fx-0')).toBeVisible();      // the effect is still listed (and editable) after reopening
+});
+
+test('Window menu: workspaces and panel visibility persist; Select, Type and Effect menus act on the document', async ({ page }) => {
+  const menu = async (name: string) => page.getByRole('menubar').getByText(name, { exact: true }).click();
+  // Effect and Select menus
+  await page.keyboard.press('m'); await page.getByTestId('swatch-ff0000').click();
+  await dragDoc(page, 100, 100, 300, 300); await dragDoc(page, 400, 100, 600, 300);
+  await page.keyboard.press('v');
+  await page.keyboard.press('Control+a');
+  await menu('Effect'); await page.getByTestId('menu-effect.dropShadow').click();
+  expect(((await elements(page))[0] as unknown as { effects: unknown[] }).effects).toHaveLength(1);
+  await menu('Effect'); await page.getByTestId('menu-effect.clear').click();
+  expect(((await elements(page))[0] as unknown as { effects?: unknown[] }).effects).toBeUndefined();
+  await page.keyboard.press('Escape');
+  await clickDoc(page, 200, 200);
+  await menu('Select'); await page.getByTestId('menu-select.sameFill').click();
+  expect(await page.evaluate(() => (window as unknown as { __vs: { workspace: { current: { selection: string[] } } } }).__vs.workspace.current.selection.length)).toBe(2);
+  await menu('Type'); await expect(page.getByTestId('menu-object.outlines')).toBeDisabled();
+  await page.keyboard.press('Escape');
+
+  // Workspaces
+  await menu('Window'); await page.getByTestId('ws-Typography').click();
+  await expect(page.getByTestId('panel-typography')).toBeVisible();
+  await expect(page.getByTestId('panel-pathfinder')).toHaveCount(0);
+  await menu('Window'); await page.getByTestId('win-pathfinder').click();      // show one more panel
+  await expect(page.getByTestId('panel-pathfinder')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.getByTestId('panel-up-pathfinder').click();                         // reorder
+  const order = await page.locator('[data-testid^="panel-"]:not([data-testid^="panel-up"]):not([data-testid^="panel-down"])').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
+  expect(order.indexOf('panel-pathfinder')).toBeLessThan(order.indexOf('panel-artboards'));
+  page.once('dialog', (d) => void d.accept('My layout'));
+  await menu('Window'); await page.getByTestId('ws-save').click();
+  await page.evaluate(() => { /* make sure storage has been written */ });
+  await page.reload();
+  await page.waitForSelector('[data-testid="canvas"]');
+  await expect(page.getByTestId('panel-pathfinder')).toBeVisible();              // layout survived the restart
+  await menu('Window');
+  await expect(page.getByTestId('ws-My layout')).toBeVisible();
+  await page.getByTestId('ws-Essentials').click();
+  await expect(page.getByTestId('panel-pathfinder')).toHaveCount(0);
+  await menu('Window'); await page.getByTestId('ws-My layout').click();
+  await expect(page.getByTestId('panel-pathfinder')).toBeVisible();
+  page.once('dialog', (d) => void d.accept());
+  await menu('Window'); await page.getByTestId('ws-delete').click();
+  await menu('Window'); await expect(page.getByTestId('ws-My layout')).toHaveCount(0);
 });

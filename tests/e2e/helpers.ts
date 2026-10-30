@@ -9,6 +9,8 @@ export async function boot(page: Page) {
   await page.waitForSelector('[data-testid="canvas"]');
   await page.waitForFunction(() => !!(window as unknown as VsWindow).__vs && !!(window as unknown as { __vsFontsReady?: Promise<void> }).__vsFontsReady);
   await page.evaluate(() => (window as unknown as { __vsFontsReady: Promise<void> }).__vsFontsReady);
+  // Most tests exercise many panels; the "All Panels" workspace shows every one of them. Workspace behaviour has its own test.
+  await page.evaluate(() => { localStorage.removeItem('vs.workspaces.v1'); (window as unknown as { __vsLayout: { switchTo(n: string): void } }).__vsLayout.switchTo('All Panels'); });
 }
 
 /** Reads the active document from the running app (read-only inspection). */
