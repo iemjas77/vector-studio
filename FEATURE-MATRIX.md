@@ -40,7 +40,8 @@ Tests: **U** unit/interaction (Vitest) · **E** Playwright browser · **X** Elec
 | Multilingual + fallback fonts | 🟡 | U | Latin/Greek/Cyrillic; Arabic/Hebrew (RTL, simplified bidi); CJK via fallback. Verified with the fonts available in the test machine |
 | Text on path | ✅ | U, E | Single line |
 | Outline conversion | ✅ | U, E, X | |
-| On-canvas text editing / caret / per-character styles / manual kerning | ⬜ | | Text is edited in the Typography panel |
+| In-place text box over the canvas (click with Type tool or double-click text) | ✅ | E | A plain text box, not WYSIWYG: the glyphs on the canvas update as you type, but there is no caret inside the artwork |
+| Per-character styles / manual kerning / justify | ⬜ | | |
 
 ## Phase 4 – professional export (partial)
 | Feature | Status | Tests | Notes |

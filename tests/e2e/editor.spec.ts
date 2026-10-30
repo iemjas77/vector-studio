@@ -502,8 +502,7 @@ test('export presets and formats: POD preset writes 300 ppi PNG; JPEG; multi-pag
 test('Type tool: create text, type into the Typography panel (one undo step), style it, outline it', async ({ page }) => {
   await page.keyboard.press('t');
   await clickDoc(page, 200, 300);
-  const area = page.getByTestId('text-content');
-  await expect(area).toBeFocused();
+  await expect(page.getByTestId('text-inline')).toBeFocused();   // in-place box over the canvas
   await page.keyboard.type('Hello World');
   await page.getByTestId('font-size').fill('120'); await page.getByTestId('font-size').press('Enter');
   await page.getByTestId('font-weight').selectOption('700');
@@ -716,4 +715,38 @@ test('Expand Stroke and Offset Path from the Object menu', async ({ page }) => {
   await page.getByTestId('offset-go').click();
   els = await elements(page);
   expect(els.length).toBeGreaterThanOrEqual(3);
+});
+
+test('in-place text box: appears on the text, edits live, closes on Escape; double-click reopens it', async ({ page }) => {
+  await page.keyboard.press('t');
+  await clickDoc(page, 300, 300);
+  const box = page.getByTestId('text-inline');
+  await expect(box).toBeVisible();
+  const pos = await box.boundingBox();
+  const at = await docToPage(page, 300, 300);
+  expect(Math.abs(pos!.x - at.x)).toBeLessThan(40);                 // sits over the text frame
+  await page.keyboard.type('Inline edit');
+  expect(((await elements(page))[0] as unknown as { content: string }).content).toBe('Inline edit');
+  await page.keyboard.press('Escape');
+  await expect(box).toHaveCount(0);
+  await page.keyboard.press('v');
+  await page.keyboard.press('Escape');                              // deselect
+  const b = (await elements(page))[0] as unknown as { x: number; y: number };
+  await clickDoc(page, b.x + 20, b.y - 10, { clickCount: 2 });
+  await expect(page.getByTestId('text-inline')).toBeVisible();
+  await page.keyboard.press('Control+a'); await page.keyboard.type('Second');
+  await page.keyboard.press('Escape');
+  expect(((await elements(page))[0] as unknown as { content: string }).content).toBe('Second');
+  await page.keyboard.press('Control+z');
+  expect(((await elements(page))[0] as unknown as { content: string }).content).toBe('Inline edit');
+});
+
+test('real double-click enters isolation mode on a group (browser click counting)', async ({ page }) => {
+  await page.keyboard.press('m');
+  await dragDoc(page, 100, 100, 200, 200);
+  await dragDoc(page, 300, 100, 400, 200);
+  await page.keyboard.press('Control+a'); await page.keyboard.press('Control+g');
+  await page.keyboard.press('v');
+  await clickDoc(page, 150, 150, { clickCount: 2 });
+  expect(await page.evaluate(() => !!(window as unknown as { __vs: { workspace: { current: { isolation: string | null } } } }).__vs.workspace.current.isolation)).toBe(true);
 });

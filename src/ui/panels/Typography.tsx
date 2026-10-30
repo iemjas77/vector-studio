@@ -15,7 +15,8 @@ export function TypographyPanel() {
 
   // Tools ask for the editor to be focused (new text, double-click) – focus and select everything so typing replaces the placeholder.
   useEffect(() => {
-    if (ed.textFocusTick > 0 && area.current) { area.current.focus(); area.current.select(); }
+    // The in-place box over the canvas takes focus; the panel only focuses if that box is not shown.
+    if (ed.textFocusTick > 0 && !ed.textEditing && area.current) { area.current.focus(); area.current.select(); }
   }, [ed.textFocusTick]);
 
   if (!t) return <div className="text-mute" data-testid="typography-empty">Select a text object, or use the Type tool (T) and click on the artboard.</div>;

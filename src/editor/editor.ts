@@ -57,6 +57,8 @@ export class Editor {
   dragging = false;
   /** Bumped when the UI should focus the text editor in the Typography panel. */
   textFocusTick = 0;
+  /** True while the in-place text box over the canvas is open. */
+  textEditing = false;
   /** Group being edited in isolation mode (only its children can be picked; the rest is dimmed). */
   isolation: string | null = null;
   // Rulers, guides, snapping
@@ -96,6 +98,7 @@ export class Editor {
     const ids = new Set(allElementIds(doc));
     if (this.isolation && !ids.has(this.isolation)) this.isolation = null;
     this.selection = this.selection.filter((id) => ids.has(id));
+    if (this.textEditing && this.selectedTexts.length !== 1) this.textEditing = false;
     for (const id of Object.keys(this.nodeSelection)) if (!ids.has(id) || !this.selection.includes(id)) delete this.nodeSelection[id];
     if (!doc.layers.some((l) => l.id === this.activeLayerId)) this.activeLayerId = doc.layers[doc.layers.length - 1].id;
     if (!doc.artboards.some((a) => a.id === this.activeArtboardId)) this.activeArtboardId = doc.artboards[0].id;
@@ -524,7 +527,8 @@ export class Editor {
   }
 
   // ---- text ----
-  requestTextFocus(): void { this.textFocusTick++; this.emit(); }
+  requestTextFocus(): void { this.textEditing = true; this.textFocusTick++; this.emit(); }
+  closeTextEditor(): void { if (this.textEditing) { this.textEditing = false; this.emit(); } }
   get selectedTexts(): Extract<Element, { type: 'text' }>[] {
     return this.selectedElements.filter((e): e is Extract<Element, { type: 'text' }> => e.type === 'text');
   }

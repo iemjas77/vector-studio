@@ -2,6 +2,7 @@
 
 ## 0.2.0 – Phase 2–6 work (unreleased)
 ### Added
+* **In-place text box** for editing text on the canvas.
 * **Expand Stroke** and **Offset Path** (grow/shrink) built on Paper.js booleans.
 * **Compound paths** (file format v2, v1 migrated on load), fill rules, make/release.
 * **Boolean operations** (Paper.js): unite, minus front, intersect, exclude.
@@ -11,8 +12,9 @@
 * **Print-on-demand tools**: templates with guides (T-shirt 4500×5400 @ 300 ppi etc.), vector clean-up, colour reduction/replacement, batch resize & export, image tracing.
 * **Automation**: JSON action lists, headless batch CLI (`npm run build:cli`), plugin API with one bundled plugin.
 * Electron: `app://vs/` protocol (WASM fetch), system font scan, batch save to a folder, binary open.
-* Tests: 220 unit/interaction, 38 browser end-to-end (including SVG interop against Chromium), PDF checks with poppler, Electron and CLI smoke tests.
+* Tests: 220 unit/interaction, 40 browser end-to-end (including SVG interop against Chromium), PDF checks with poppler, Electron and CLI smoke tests.
 ### Fixed during development (regression tests added)
+* Double-click never worked in the real UI (browsers report `detail` 0 on pointer events); clicks are now counted in the canvas view. Affected isolation mode, add-anchor, pen finish and text re-editing.
 * Layers drag-and-drop disabled for top-level rows; drop landed one slot off.
 * Dialog Escape handling; file-chooser "cancel" race on open.
 * Group/ungroup, duplicate and alt-drag crashes when working on immer drafts.

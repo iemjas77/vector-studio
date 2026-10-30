@@ -12,6 +12,8 @@ export function CanvasView() {
   const wrap = useRef<HTMLDivElement>(null);
   const raf = useRef(0);
   const spaceDown = useUi((s) => s.spaceDown);
+  /** Pointer events report detail = 0, so double-clicks are counted here (same spot, within 400 ms). */
+  const lastDown = useRef({ t: 0, x: 0, y: 0, n: 0 });
   const panMode = useRef<'none' | 'middle' | 'space'>('none');
 
   // Resize canvas to its container at device resolution (handles high-DPI and multi-monitor DPR changes).
@@ -84,7 +86,10 @@ export function CanvasView() {
     }
     // Clicking the canvas should not leave a text field focused.
     (document.activeElement as HTMLElement | null)?.blur?.();
-    ed.pointerDown(p.x, p.y, { shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey || e.metaKey, detail: e.detail });
+    const now = performance.now(), ld = lastDown.current;
+    const n = now - ld.t < 400 && Math.hypot(p.x - ld.x, p.y - ld.y) < 5 ? ld.n + 1 : 1;
+    lastDown.current = { t: now, x: p.x, y: p.y, n };
+    ed.pointerDown(p.x, p.y, { shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey || e.metaKey, detail: n });
   };
   const onPointerMove = (e: React.PointerEvent) => {
     const p = local(e);
@@ -111,6 +116,8 @@ export function CanvasView() {
     return () => canvas.removeEventListener('wheel', onWheel);
   }, [ed]);
 
+  const editing = ed.textEditing && ed.selectedTexts.length === 1 ? ed.selectedTexts[0] : null;
+  const eb = editing ? ed.selectionBounds() : null;
   const hv = ed.hover ? ed.viewport.toScreen(ed.hover) : null;
   const onRuler = ed.showRulers && !!hv && (hv.x < RULER || hv.y < RULER);
   const onGuide = !onRuler && ed.showRulers && !!ed.hover && (ed.doc.guides ?? []).some((g) => Math.abs((g.axis === 'v' ? ed.hover!.x : ed.hover!.y) - g.pos) <= ed.hitTol(4));
@@ -119,10 +126,26 @@ export function CanvasView() {
     <div ref={wrap} className="relative flex-1 min-w-0 min-h-0 overflow-hidden" data-testid="canvas-wrap">
       <canvas
         ref={ref} data-testid="canvas" style={{ cursor, touchAction: 'none', display: 'block' }}
+        onMouseDown={(e) => e.preventDefault() /* keep focus where the tool put it (e.g. the in-place text box) */}
         onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
         onPointerLeave={() => { ed.hover = null; }}
         onContextMenu={(e) => e.preventDefault()}
       />
+      {editing && eb && (() => {
+        const tl = ed.viewport.toScreen({ x: eb.x, y: eb.y });
+        const px = Math.min(48, Math.max(12, editing.fontSize * ed.viewport.zoom));
+        return (
+          <textarea
+            key={editing.id} data-testid="text-inline" aria-label="Edit text in place" autoFocus
+            value={editing.content}
+            onFocus={(e) => { ed.beginTextEdit(); e.currentTarget.select(); }}
+            onChange={(e) => ed.liveTextEdit({ content: e.target.value })}
+            onBlur={() => { ed.endTextEdit(); ed.closeTextEditor(); }}
+            onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Escape') e.currentTarget.blur(); }}
+            style={{ position: 'absolute', left: Math.max(RULER, tl.x), top: Math.max(RULER, tl.y), width: Math.max(160, eb.w * ed.viewport.zoom + 16), minHeight: Math.max(36, eb.h * ed.viewport.zoom + 8), font: `${px}px system-ui, sans-serif`, color: '#fff', background: 'rgba(20,20,20,0.88)', border: '1px solid #4d9cff', borderRadius: 3, padding: 4, resize: 'both', userSelect: 'text', zIndex: 20 }}
+          />
+        );
+      })()}
     </div>
   );
 }

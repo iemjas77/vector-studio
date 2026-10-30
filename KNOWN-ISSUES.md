@@ -28,7 +28,7 @@
 
 ## Text
 * One style per text object. No per-character styling, manual kerning, justify, paragraph spacing/indent, vertical text, OpenType-feature UI, variable-font axes or spell check.
-* Text is edited in the Typography panel, not on the canvas.
+* Text is edited in a box placed over the text (or in the Typography panel); there is no caret drawn inside the artwork itself.
 * Simplified bidi (directional runs only; brackets are not mirrored). Colour/emoji fonts render as plain outlines.
 * Missing glyphs show as the font's "notdef" until fallback fonts finish loading (first use only); fallback families are guessed from a preference list.
 * Weight uses the nearest installed face (no synthetic bold); italic is synthesised (12° skew) when the family has no italic face.

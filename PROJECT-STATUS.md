@@ -9,7 +9,7 @@ Phases 0 and 1 are complete. Phases 2–6 are partly implemented (see ROADMAP.md
 | `npm run typecheck` | clean |
 | `npm run lint` | clean |
 | `npm test` (Vitest, Node) | **220 passed** in 16 files |
-| `npm run test:e2e` (Playwright, real Chromium) | **38 passed** |
+| `npm run test:e2e` (Playwright, real Chromium) | **40 passed** |
 | `xvfb-run -a npm run test:electron` | OK (shape, HarfBuzz text over `app://`, 109 system fonts discovered, native save) |
 | `npm run test:cli` | OK |
 | Windows | **not tested** |
