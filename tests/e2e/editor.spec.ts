@@ -903,3 +903,23 @@ test('pencil, magic wand and artboard tools work with real mouse input', async (
   await dragDoc(page, 2200, 100, 2600, 500);
   expect((await docOf(page)).artboards).toHaveLength(2);
 });
+
+test('Transform, Pathfinder and Document Info panels act on the real document', async ({ page }) => {
+  await page.keyboard.press('m'); await page.getByTestId('swatch-ff0000').click();
+  await dragDoc(page, 200, 200, 400, 300);
+  await page.getByTestId('tf-rotate').fill('90'); await page.getByTestId('tf-rotate').press('Enter');
+  await page.getByTestId('tf-rotate-go').click();
+  let r = (await elements(page))[0] as unknown as { transform: number[] };
+  expect(Math.abs(r.transform[0])).toBeLessThan(1e-9); expect(Math.abs(r.transform[1] - 1)).toBeLessThan(1e-9);
+  await page.getByTestId('tf-flip-h').click();
+  r = (await elements(page))[0] as never;
+  expect(Math.abs(r.transform[0])).toBeLessThan(1e-9);
+  await expect(page.getByTestId('di-counts')).toContainText('1 object(s) (1 rect)');
+  await expect(page.getByTestId('di-colors')).toContainText('2 colour(s)')   // red fill + the default black stroke;
+  await dragDoc(page, 300, 250, 500, 350);
+  await page.keyboard.press('v'); await page.keyboard.press('Control+a');
+  await expect(page.getByTestId('pf-unite')).toBeEnabled();
+  await page.getByTestId('pf-unite').click();
+  expect(await elements(page)).toHaveLength(1);
+  await expect(page.getByTestId('di-counts')).toContainText('1 path');
+});

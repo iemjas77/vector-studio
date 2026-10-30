@@ -2,7 +2,7 @@ import {
   History, addElement, addArtboard, addLayer, convertToPath, createDocument, defaultStroke, duplicateElements, elementBounds, elementNodes,
   elementsInRect, getElement, groupElements, hitTest, insertCopies, locate, moveLayer, parentMatrix, patchArtboard, patchElements, patchLayer,
   removeArtboard, removeElements, removeLayer, reorder, selectionBounds, setPathNodes, solid, transformWorld, ungroupElements, worldMatrix,
-  expandStroke, offsetPath, allElementIds, moveElement, worldBounds, solidOf, hitTestChildren, childrenInRect, addGuide, moveGuide, removeGuide, clearGuides, booleanOperation, makeCompoundPath, releaseCompoundPaths, type BooleanOp,
+  expandStroke, offsetPath, allElementIds, moveElement, worldBounds, insertCopiesRelative, solidOf, hitTestChildren, childrenInRect, addGuide, moveGuide, removeGuide, clearGuides, booleanOperation, makeCompoundPath, releaseCompoundPaths, type BooleanOp,
   patchText, textOnPath, releaseTextPath, type TextPatch,
   alignElements, distributeElements, makeClippingMask, releaseClippingMask, type AlignMode, type DistributeMode,
   type Artboard, type Element, type Paint, type PathElement, type Stroke, type VDocument, type ZOrder,
@@ -400,6 +400,36 @@ export class Editor {
     this.copy();
     this.deleteSelection();
   }
+  /** Paste at the same position directly above ('front') or below ('back') the first selected object (falls back to the top/bottom of the active layer). */
+  pasteRelative(where: 'front' | 'back'): void {
+    if (!this.clipboard.length) return;
+    const ref = this.selection[0] ?? null;
+    let ids: string[] = [];
+    this.apply(where === 'front' ? 'Paste in front' : 'Paste in back', (d) => {
+      if (ref) ids = insertCopiesRelative(d, this.clipboard, ref, where);
+      else {
+        ids = insertCopies(d, this.clipboard, this.activeLayerId, 0, 0);
+        if (where === 'back') reorder(d, ids, 'back');
+      }
+    });
+    this.select(ids);
+  }
+  /** Paste centred on the active artboard (useful to move artwork between artboards). */
+  pasteOnActiveArtboard(): void {
+    if (!this.clipboard.length) return;
+    const a = this.activeArtboard;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const el of this.clipboard) {
+      const b = elementBounds(el);
+      if (!b) continue;
+      minX = Math.min(minX, b.x); minY = Math.min(minY, b.y); maxX = Math.max(maxX, b.x + b.w); maxY = Math.max(maxY, b.y + b.h);
+    }
+    if (!isFinite(minX)) return;
+    const dx = a.x + a.w / 2 - (minX + maxX) / 2, dy = a.y + a.h / 2 - (minY + maxY) / 2;
+    let ids: string[] = [];
+    this.apply('Paste on artboard', (d) => { ids = insertCopies(d, this.clipboard, this.activeLayerId, dx, dy); });
+    this.select(ids);
+  }
   paste(inPlace = false): void {
     if (!this.clipboard.length) return;
     let ids: string[] = [];
@@ -537,6 +567,46 @@ export class Editor {
     if (!b || !(percent > 0)) return;
     const s = percent / 100, cx = b.x + b.w / 2, cy = b.y + b.h / 2;
     this.transformSelection([s, 0, 0, s, cx - cx * s, cy - cy * s], 'Scale');
+  }
+  /** Rotate the selection by `deg` (clockwise on screen) about the centre of its bounds. */
+  rotateSelection(deg: number): void {
+    const b = this.selectionBounds();
+    if (!b || !isFinite(deg)) return;
+    const a = (deg * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a), cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+    this.transformSelection([c, s, -s, c, cx - c * cx + s * cy, cy - s * cx - c * cy], 'Rotate');
+  }
+  /** Shear horizontally by `deg` (positive leans right) about the centre of the bounds. */
+  shearSelection(deg: number): void {
+    const b = this.selectionBounds();
+    if (!b || !isFinite(deg) || Math.abs(deg) >= 89) return;
+    const k = Math.tan((deg * Math.PI) / 180), cy = b.y + b.h / 2;
+    this.transformSelection([1, 0, -k, 1, k * cy, 0], 'Shear');
+  }
+  reflectSelection(axis: 'horizontal' | 'vertical'): void {
+    const b = this.selectionBounds();
+    if (!b) return;
+    const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+    this.transformSelection(axis === 'horizontal' ? [-1, 0, 0, 1, 2 * cx, 0] : [1, 0, 0, -1, 0, 2 * cy], 'Reflect');
+  }
+  /** Non-uniform scale in percent about the centre of the bounds. */
+  scaleSelectionXY(px: number, py: number): void {
+    const b = this.selectionBounds();
+    if (!b || !(px > 0) || !(py > 0)) return;
+    const sx = px / 100, sy = py / 100, cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+    this.transformSelection([sx, 0, 0, sy, cx - sx * cx, cy - sy * cy], 'Scale');
+  }
+  /** Transform Each: scale %, rotation and move applied to every selected object about its OWN centre. */
+  transformEach(o: { scale?: number; rotate?: number; moveX?: number; moveY?: number }): void {
+    const ids = [...this.selection];
+    if (!ids.length) return;
+    this.apply('Transform each', (d) => {
+      for (const id of ids) {
+        const b = worldBounds(d, id);
+        if (!b) continue;
+        const cx = b.x + b.w / 2, cy = b.y + b.h / 2, s = (o.scale ?? 100) / 100, a = ((o.rotate ?? 0) * Math.PI) / 180, c = Math.cos(a) * s, sn = Math.sin(a) * s;
+        transformWorld(d, [id], [c, sn, -sn, c, cx - c * cx + sn * cy + (o.moveX ?? 0), cy - sn * cx - c * cy + (o.moveY ?? 0)]);
+      }
+    });
   }
   /** Rename all layers with a pattern: {n} = number (bottom layer is 1), {name} = old name. */
   renameLayers(pattern: string): void {

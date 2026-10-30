@@ -346,3 +346,12 @@ export function patchText(doc: VDocument, ids: readonly string[], patch: TextPat
     if (loc && loc.element.type === 'text') Object.assign(loc.element, patch);
   }
 }
+
+/** Insert copies directly above/below an existing object (same parent list, same position). Returns the new ids. */
+export function insertCopiesRelative(doc: VDocument, els: Element[], refId: string, where: 'front' | 'back', dx = 0, dy = 0): string[] {
+  const loc = locate(doc, refId);
+  if (!loc) return insertCopies(doc, els, undefined, dx, dy);
+  const copies = els.map((el) => { const c = cloneWithNewIds(el); c.transform = multiply([1, 0, 0, 1, dx, dy], c.transform); return c; });
+  loc.siblings.splice(where === 'front' ? loc.index + 1 : loc.index, 0, ...copies);
+  return copies.map((c) => c.id);
+}

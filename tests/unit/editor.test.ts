@@ -730,3 +730,35 @@ describe('additional drawing and picking tools', () => {
     expect(e.doc.artboards).toHaveLength(2);
   });
 });
+
+describe('paste variants', () => {
+  it('paste in front/back keeps position and stacks directly above/below the reference', () => {
+    const e = ed();
+    const a = createRect(10, 10, 50, 50), b = createRect(100, 10, 50, 50), c = createRect(200, 10, 50, 50);
+    e.apply('seed', (d) => { [a, b, c].forEach((x) => addElement(d, x)); });
+    e.select([b.id]); e.copy();
+    e.pasteRelative('front');
+    let order = els(e).map((x) => x.id);
+    expect(order.indexOf(e.selection[0])).toBe(order.indexOf(b.id) + 1);
+    expect(worldBounds(e.doc, e.selection[0])).toMatchObject({ x: 100, y: 10 });
+    e.select([b.id]);
+    e.pasteRelative('back');
+    order = els(e).map((x) => x.id);
+    expect(order.indexOf(e.selection[0])).toBe(order.indexOf(b.id) - 1);
+    e.undo(); e.undo();
+    expect(els(e)).toHaveLength(3);
+    e.clearSelection(); e.pasteRelative('back');           // nothing selected: bottom of the active layer
+    expect(els(e)[0].id).toBe(e.selection[0]);
+  });
+  it('paste on active artboard centres the artwork there', () => {
+    const e = ed(800, 600);
+    e.apply('ab', (d) => { d.artboards.push({ id: 'abx', name: 'B', x: 1000, y: 0, w: 400, h: 200, background: null }); });
+    const r = createRect(10, 10, 100, 40);
+    e.apply('seed', (d) => addElement(d, r));
+    e.select([r.id]); e.copy();
+    e.activeArtboardId = 'abx';
+    e.pasteOnActiveArtboard();
+    const b = worldBounds(e.doc, e.selection[0])!;
+    expect(b.x + b.w / 2).toBeCloseTo(1200); expect(b.y + b.h / 2).toBeCloseTo(100);
+  });
+});

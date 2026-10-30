@@ -254,3 +254,37 @@ describe('batch processing', () => {
   });
 });
 
+
+describe('transform steps', () => {
+  it('rotate, shear, reflect, non-uniform scale and transform-each produce exact geometry and are undoable', async () => {
+    const { ctx, editor } = ctxFor(docWith([100, 100, 200, 100, '#ff0000']));
+    const id = () => editor.doc.layers[0].children[0].id;
+    const run = async (type: string, params: Record<string, unknown>) => { const lib = new ActionLibrary(); const a = lib.createAction(null, 'T'); lib.addStep(a.id, 'selectAll'); lib.addStep(a.id, type, params); return playAction(lib.find(a.id)!.action, ctx); };
+    expect((await run('rotate', { degrees: 90 })).status).toBe('completed');
+    let b = worldBounds(editor.doc, id())!;
+    expect(b.w).toBeCloseTo(100); expect(b.h).toBeCloseTo(200);
+    expect(b.x + b.w / 2).toBeCloseTo(200); expect(b.y + b.h / 2).toBeCloseTo(150);      // rotated about its own centre
+    editor.undo(); editor.undo();
+    expect((await run('reflect', { axis: 'horizontal' })).status).toBe('completed');
+    b = worldBounds(editor.doc, id())!;
+    expect(b).toMatchObject({ x: 100, y: 100, w: 200, h: 100 });                          // mirrored in place
+    expect(editor.doc.layers[0].children[0].transform[0]).toBe(-1);
+    expect((await run('scaleXY', { x: 50, y: 200 })).status).toBe('completed');
+    b = worldBounds(editor.doc, id())!;
+    expect(b.w).toBeCloseTo(100); expect(b.h).toBeCloseTo(200);
+    expect((await run('shear', { degrees: 45 })).status).toBe('completed');
+    b = worldBounds(editor.doc, id())!;
+    expect(b.w).toBeCloseTo(100 + 200);                                                   // height 200 × tan45 widens the bounds
+    expect((await run('transformEach', { scale: 50, moveX: 10 })).status).toBe('completed');
+    const lib2 = new ActionLibrary(); const a2 = lib2.createAction(null, 'x');
+    expect(() => lib2.addStep(a2.id, 'rotate', { degrees: 1000 })).toThrow(/degrees/);   // out of range is rejected
+  });
+  it('transform each acts on every object about its own centre', async () => {
+    const { ctx, editor } = ctxFor(docWith([0, 0, 100, 100, '#ff0000'], [500, 500, 100, 100, '#0000ff']));
+    const lib = new ActionLibrary(); const a = lib.createAction(null, 'T'); lib.addStep(a.id, 'selectAll'); lib.addStep(a.id, 'transformEach', { scale: 50 });
+    await playAction(lib.find(a.id)!.action, ctx);
+    const [p, q] = editor.doc.layers[0].children.map((e) => worldBounds(editor.doc, e.id)!);
+    expect(p).toMatchObject({ x: 25, y: 25, w: 50, h: 50 });
+    expect(q).toMatchObject({ x: 525, y: 525, w: 50, h: 50 });
+  });
+});

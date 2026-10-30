@@ -14,6 +14,7 @@ import { ColorPanel } from './panels/Color';
 import { StrokePanel } from './panels/Stroke';
 import { LayersPanel } from './panels/Layers';
 import { AlignPanel } from './panels/Align';
+import { DocumentInfoPanel, PathfinderPanel, TransformPanel } from './panels/Panels2';
 import { ActionsPanel } from './panels/Actions';
 import { actions } from './actions-service';
 import { TypographyPanel } from './panels/Typography';
@@ -33,7 +34,10 @@ const PANELS = [
   { id: 'color', title: 'Color', el: <ColorPanel /> },
   { id: 'stroke', title: 'Stroke', el: <StrokePanel /> },
   { id: 'typography', title: 'Typography', el: <TypographyPanel /> },
+  { id: 'pathfinder', title: 'Pathfinder', el: <PathfinderPanel /> },
+  { id: 'transform', title: 'Transform', el: <TransformPanel /> },
   { id: 'align', title: 'Align', el: <AlignPanel /> },
+  { id: 'docinfo', title: 'Document Info', el: <DocumentInfoPanel /> },
   { id: 'actions', title: 'Actions', el: <ActionsPanel /> },
   { id: 'layers', title: 'Layers', el: <LayersPanel /> },
   { id: 'artboards', title: 'Artboards', el: <ArtboardsPanel /> },
