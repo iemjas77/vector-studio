@@ -923,3 +923,43 @@ test('Transform, Pathfinder and Document Info panels act on the real document', 
   expect(await elements(page)).toHaveLength(1);
   await expect(page.getByTestId('di-counts')).toContainText('1 path');
 });
+
+test('custom keyboard shortcuts: rebind, conflicts, persistence across reload, typing is not hijacked, export/import', async ({ page }, info) => {
+  const fs = await import('node:fs');
+  await page.keyboard.press('F1');
+  await expect(page.getByTestId('dialog-shortcuts')).toBeVisible();
+  await page.getByTestId('km-filter').fill('p');                 // typing letters in a field must not switch tools
+  expect(await page.evaluate(() => (window as unknown as { __vs: { workspace: { current: { toolId: string } } } }).__vs.workspace.current.toolId)).toBe('select');
+  await page.getByTestId('km-filter').fill('Pen Tool');
+  await page.getByTestId('km-tool.pen').click();
+  await page.keyboard.press('k');
+  await expect(page.getByTestId('km-tool.pen')).toHaveText('K');
+  await page.getByTestId('km-filter').fill('Rectangle Tool');
+  await page.getByTestId('km-tool.rect').click();
+  await page.keyboard.press('k');                                // already used by the Pen tool now
+  await expect(page.getByTestId('km-error')).toContainText('already used');
+  await page.keyboard.press('k');                                // press again to take it over
+  await expect(page.getByTestId('km-tool.rect')).toHaveText('K');
+  await page.keyboard.press('Escape');
+  await page.reload();
+  await page.waitForSelector('[data-testid="canvas"]');
+  await page.keyboard.press('k');
+  await expect(page.getByTestId('status-tool')).toHaveText('Rectangle');   // persisted, and the old key M no longer works for Rectangle
+  await page.keyboard.press('m');
+  await expect(page.getByTestId('status-tool')).toHaveText('Rectangle');
+  await page.keyboard.press('v');
+  await page.getByRole('menubar').getByText('Edit', { exact: true }).click();
+  await page.keyboard.press('Escape');
+  // export, reset to the built-in preset, import back
+  await page.keyboard.press('F1');
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByTestId('km-export').click()]);
+  const file = info.outputPath('keys.vskeys'); await dl.saveAs(file);
+  expect(JSON.parse(fs.readFileSync(file, 'utf8')).shortcuts['tool.rect']).toBe('K');
+  await page.getByTestId('km-preset').selectOption('Illustrator');
+  await expect(page.getByTestId('km-tool.rect')).toHaveText('M');
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByTestId('km-import').click();
+  await (await chooser).setFiles(file);
+  await expect(page.getByTestId('km-msg')).toContainText('Imported');
+  await expect(page.getByTestId('km-tool.rect')).toHaveText('K');
+});

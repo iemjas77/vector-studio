@@ -6,6 +6,7 @@ import { exportImage } from '../render/browser-export';
 import { platform } from '../platform';
 import { useUi } from './store';
 import { actions } from './actions-service';
+import { eventToShortcut, Keymap, normalizeShortcut, type KeyEventLike } from './keymap';
 import type { Workspace } from './workspace';
 
 export interface App {
@@ -283,35 +284,29 @@ export function newDocumentFrom(app: App, name: string, w: number, h: number, ba
   ed.fitArtboard();
 }
 
-// ---- shortcut matching ----
+// ---- shortcut matching (driven by the customisable keymap) ----
+export const keymap = new Keymap(COMMANDS);
+
 export interface ParsedShortcut { key: string; ctrl: boolean; shift: boolean; alt: boolean }
-
 export function parseShortcut(s: string): ParsedShortcut {
-  const parts = s.split('+');
-  // A trailing "+" key ("Ctrl++") yields an empty last part.
-  const key = s.endsWith('++') ? '+' : parts[parts.length - 1];
-  const mods = s.endsWith('++') ? parts.slice(0, -2) : parts.slice(0, -1);
-  return { key: key.toLowerCase(), ctrl: mods.includes('Ctrl'), shift: mods.includes('Shift'), alt: mods.includes('Alt') };
+  const n = normalizeShortcut(s);
+  const parts = n.endsWith('++') ? [...n.slice(0, -2).split('+'), '+'] : n.split('+');
+  const key = parts[parts.length - 1];
+  return { key: key.toLowerCase(), ctrl: parts.includes('Ctrl'), shift: parts.includes('Shift'), alt: parts.includes('Alt') };
 }
 
-const PARSED = COMMANDS.filter((c) => !!c.shortcut).map((c) => ({ c, s: parseShortcut(c.shortcut!) }));
-
-/** Finds the command for a key event. Tool letters only fire when no modifier is held. */
-export function commandForKey(e: { key: string; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean; code?: string }): Command | null {
-  const ctrl = e.ctrlKey || e.metaKey;
-  let key = e.key.toLowerCase();
-  // Shift changes the produced character for punctuation; map back so "Ctrl+Shift+]" works.
-  const shiftMap: Record<string, string> = { '}': ']', '{': '[', '_': '-', '+': '+', ')': '0' };
-  if (e.shiftKey && shiftMap[key]) key = shiftMap[key];
-  for (const { c, s } of PARSED) {
-    if (s.key !== key || s.ctrl !== ctrl || s.alt !== e.altKey) continue;
-    if (s.shift !== e.shiftKey && !(key === '+' && ctrl)) continue;
-    return c;
-  }
-  return null;
+/** The command bound to this key event under the active keymap, or null. */
+export function commandForKey(e: KeyEventLike): Command | null {
+  const s = eventToShortcut(e);
+  if (!s) return null;
+  const id = keymap.commandFor(s);
+  return id ? COMMANDS.find((c) => c.id === id) ?? null : null;
 }
 
-export const SHORTCUT_LIST = COMMANDS.filter((c) => c.shortcut && !/2$/.test(c.id));
+/** Shortcut shown in menus for a command (honours user changes). */
+export const shortcutOf = (c: Command): string => keymap.get(c.id) ?? '';
+
+export const SHORTCUT_LIST = COMMANDS.filter((c) => !/2$/.test(c.id) && !c.id.endsWith('zoomIn2'));
 
 /** Decode a raster file into RGBA (flattened on white, scaled down so the longest side is at most `maxSide`). */
 export async function decodeImage(bytes: Uint8Array, maxSide = 1600): Promise<{ image: { width: number; height: number; data: Uint8ClampedArray }; scaledFrom?: [number, number] }> {

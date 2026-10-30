@@ -2,7 +2,9 @@ import { useState, type ReactNode } from 'react';
 import { rasterSize, withBleed } from '../../render/export';
 import { ARTBOARD_PRESETS } from '../panels/Artboards';
 import { TEMPLATES } from '../templates';
-import { newDocumentFrom, runExport, SHORTCUT_LIST } from '../commands';
+import { COMMANDS, keymap, newDocumentFrom, runExport, SHORTCUT_LIST } from '../commands';
+import { eventToShortcut } from '../keymap';
+import { platform } from '../../platform';
 import { EXPORT_PRESETS, type ExportFormat } from '../export-presets';
 import { checkExport, physicalSize } from '../../core/io';
 import { useApp } from '../hooks';
@@ -164,15 +166,70 @@ export function ExportPngDialog() {
 
 export function ShortcutsDialog() {
   const close = () => useUi.getState().openDialog(null);
+  const [, setV] = useState(0);
+  const [filter, setFilter] = useState('');
+  const [capturing, setCapturing] = useState<string | null>(null);
+  const [err, setErr] = useState('');
+  const [msg, setMsg] = useState('');
+  const [pending, setPending] = useState<{ id: string; sc: string } | null>(null);
+  const refresh = () => setV((v) => v + 1);
+  const ids = new Set(SHORTCUT_LIST.map((c) => c.id));
+  const rows = SHORTCUT_LIST.filter((c) => c.label.toLowerCase().includes(filter.toLowerCase()) || (keymap.get(c.id) ?? '').toLowerCase().includes(filter.toLowerCase()));
+  const labelOf = (id: string) => COMMANDS.find((c) => c.id === id)?.label ?? id;
   return (
     <Dialog title="Keyboard Shortcuts" onClose={close} testId="dialog-shortcuts">
-      <div style={{ columnCount: 2, columnGap: 24 }}>
-        {SHORTCUT_LIST.map((c) => <div key={c.id} className="row" style={{ justifyContent: 'space-between', breakInside: 'avoid' }}><span>{c.label}</span><span className="text-mute">{c.shortcut}</span></div>)}
-        <div className="row" style={{ justifyContent: 'space-between' }}><span>Pan (hold)</span><span className="text-mute">Space + drag</span></div>
-        <div className="row" style={{ justifyContent: 'space-between' }}><span>Nudge / 10px</span><span className="text-mute">Arrows / Shift+Arrows</span></div>
-        <div className="row" style={{ justifyContent: 'space-between' }}><span>Finish pen path</span><span className="text-mute">Enter / Esc</span></div>
+      <div className="flex flex-col gap-2" style={{ minWidth: 560 }}>
+        <div className="row">
+          <span>Preset</span>
+          <select data-testid="km-preset" value={keymap.active} onChange={(e) => { keymap.selectPreset(e.target.value); refresh(); }}>
+            <option value="Illustrator">Illustrator (default)</option>
+            {keymap.presets.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
+          </select>
+          <button className="btn" data-testid="km-saveas" onClick={() => { const n = window.prompt('Name for the new shortcut preset'); if (n) { try { keymap.saveAs(n); setErr(''); refresh(); } catch (e) { setErr((e as Error).message); } } }}>Save as…</button>
+          <button className="btn" data-testid="km-reset" onClick={() => { keymap.resetAll(); refresh(); }}>Reset all</button>
+          <input type="text" data-testid="km-filter" placeholder="Filter…" style={{ flex: 1 }} value={filter} onChange={(e) => setFilter(e.target.value)} onKeyDown={(e) => e.stopPropagation()} />
+        </div>
+        {err && <div style={{ color: '#ff9a9a' }} data-testid="km-error">{err}</div>}
+        {msg && <div style={{ color: '#9a9a9a' }} data-testid="km-msg">{msg}</div>}
+        <div style={{ maxHeight: 340, overflow: 'auto' }} data-testid="km-list">
+          {rows.map((c) => (
+            <div key={c.id} className="row" style={{ justifyContent: 'space-between', padding: '2px 0' }}>
+              <span style={{ flex: 1 }}>{c.label}</span>
+              <button
+                className="btn" style={{ minWidth: 130, background: capturing === c.id ? '#3d5f94' : undefined }} data-testid={`km-${c.id}`}
+                onClick={() => { setCapturing(c.id); setErr(''); }}
+                onKeyDown={(e) => {
+                  if (capturing !== c.id) return;
+                  e.preventDefault(); e.stopPropagation();
+                  if (e.key === 'Escape') { setCapturing(null); return; }
+                  if (e.key === 'Backspace' || e.key === 'Delete') { if (!e.ctrlKey && !e.shiftKey && !e.altKey) { keymap.set(c.id, ''); setCapturing(null); refresh(); return; } }
+                  const sc = eventToShortcut(e.nativeEvent);
+                  if (!sc) return;
+                  try { keymap.set(c.id, sc, pending?.id === c.id && pending.sc === sc); setErr(''); setPending(null); setCapturing(null); refresh(); } catch (er) {
+                    const other = keymap.conflict(sc, c.id);
+                    setErr(`${(er as Error).message}. ${other ? `Press the same keys again to take it from "${labelOf(other)}".` : ''}`);
+                    setPending({ id: c.id, sc });
+                  }
+                }}
+                onBlur={() => capturing === c.id && setCapturing(null)}
+              >{capturing === c.id ? 'Press keys…' : keymap.get(c.id) ?? '—'}</button>
+              {keymap.isCustom(c.id) && <button className="icon-btn" aria-label={`Reset ${c.label}`} title="Reset to default" onClick={() => { keymap.reset(c.id); refresh(); }}>↺</button>}
+            </div>
+          ))}
+        </div>
+        <div className="text-mute">Click a shortcut, then press the new keys (Backspace clears, Esc cancels). Shortcuts never fire while you type in a text field.</div>
+        <div className="row" style={{ justifyContent: 'space-between' }}>
+          <span className="row">
+            <button className="btn" data-testid="km-export" onClick={() => void platform.saveFile({ suggestedName: 'shortcuts', ext: 'vskeys', data: keymap.toJSON(), mime: 'application/json', forceDialog: true })}>Export…</button>
+            <button className="btn" data-testid="km-import" onClick={async () => {
+              const f = await platform.openTextFile(['.vskeys', '.json']);
+              if (!f) return;
+              try { const r = keymap.importJSON(f.text, ids); setMsg(`Imported "${r.name}"${r.ignored.length ? ` (ignored ${r.ignored.length} unknown command(s))` : ''}`); setErr(''); refresh(); } catch (e) { setErr((e as Error).message); }
+            }}>Import…</button>
+          </span>
+          <button className="btn" onClick={close}>Close</button>
+        </div>
       </div>
-      <div className="row" style={{ justifyContent: 'flex-end', marginTop: 12 }}><button className="btn" onClick={close}>Close</button></div>
     </Dialog>
   );
 }

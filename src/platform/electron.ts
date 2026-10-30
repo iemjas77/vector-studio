@@ -16,7 +16,7 @@ declare global {
 }
 
 export function getElectronPlatform(): Platform | null {
-  const api = window.vsElectron;
+  const api = typeof window === "undefined" ? undefined : window.vsElectron;
   if (!api) return null;
   return { kind: 'electron', fontSource: { list: () => api.listFonts(), load: async (k) => new Uint8Array(await api.readFont(k)) }, openTextFile: (a) => api.openTextFile(a), openTextFiles: (a, f) => api.openTextFiles(a, f), openBinaryFile: async (a) => { const r = await api.openBinaryFile(a); return r ? { name: r.name, bytes: new Uint8Array(r.bytes) } : null; }, saveFile: (r) => api.saveFile(r), saveFiles: (f) => api.saveFiles(f), onCloseRequest: (h) => api.onCloseRequest(h) };
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { cmd, type App } from './commands';
+import { cmd, shortcutOf, type App } from './commands';
 import { listPlugins, type PluginApi } from '../automation/plugin';
 import { useUi } from './store';
 import { useApp } from './hooks';
@@ -56,7 +56,7 @@ function MenuItem({ id, app, onDone }: { id: string; app: App; onDone(): void })
   const enabled = c.enabled ? c.enabled(app) : true;
   return (
     <button className="menu-item" role="menuitem" data-testid={`menu-${id}`} disabled={!enabled} onClick={() => { onDone(); void c.run(app); }}>
-      <span>{c.checked ? (c.checked(app) ? '✓ ' : '\u2003') : ''}{c.label}</span><span className="text-mute">{c.shortcut ?? ''}</span>
+      <span>{c.checked ? (c.checked(app) ? '✓ ' : '\u2003') : ''}{c.label}</span><span className="text-mute">{shortcutOf(c)}</span>
     </button>
   );
 }
