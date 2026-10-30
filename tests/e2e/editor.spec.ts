@@ -690,3 +690,30 @@ test('bleed field grows the output size and PDF export offers it', async ({ page
   await page.getByTestId('export-bleed').fill('3');
   await expect(page.getByTestId('export-go')).toBeEnabled();
 });
+
+test('Expand Stroke and Offset Path from the Object menu', async ({ page }) => {
+  await page.keyboard.press('m');
+  await dragDoc(page, 200, 200, 400, 400);
+  await page.getByTestId('target-stroke').click(); await page.getByTestId('swatch-0070ff').click();
+  await page.getByTestId('stroke-width').fill('20'); await page.getByTestId('stroke-width').press('Enter');
+  await page.getByRole('menubar').getByText('Object', { exact: true }).click();
+  await page.getByTestId('menu-object.expandStroke').click();
+  let els = await elements(page);
+  expect(els).toHaveLength(1);
+  const g = els[0] as unknown as { type: string; children: { type: string; stroke: unknown; fill: { color: string } }[] };
+  expect(g.type).toBe('group');
+  expect(g.children).toHaveLength(2);
+  expect(g.children[1]).toMatchObject({ type: 'path', stroke: null, fill: { color: '#0070ff' } });
+  await page.keyboard.press('Control+Shift+g');   // ungroup: both outlines selected
+  els = await elements(page);
+  expect(els).toHaveLength(2);
+  await page.getByRole('menubar').getByText('Object', { exact: true }).click();
+  await page.getByTestId('menu-object.offsetPath').click();
+  await page.getByTestId('offset-distance').fill('0');
+  await expect(page.getByTestId('offset-go')).toBeDisabled();
+  await page.getByTestId('offset-distance').fill('-5');
+  await page.getByTestId('offset-join').selectOption('miter');
+  await page.getByTestId('offset-go').click();
+  els = await elements(page);
+  expect(els.length).toBeGreaterThanOrEqual(3);
+});

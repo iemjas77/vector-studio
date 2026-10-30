@@ -4,6 +4,7 @@ export * from './query';
 export * from './shape';
 export * from './ops';
 export * from './boolean';
+export * from './stroke';
 export * from './arrange';
 export * from './paint';
 export * from './cleanup';

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 import type { RasterImage } from '../core/io';
 
-export type DialogId = 'new' | 'export' | 'shortcuts' | 'about' | 'cleanup' | 'colors' | 'trace' | 'batch' | null;
+export type DialogId = 'new' | 'export' | 'shortcuts' | 'about' | 'cleanup' | 'colors' | 'trace' | 'batch' | 'offset' | null;
 
 interface UiState {
   dialog: DialogId;

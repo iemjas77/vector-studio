@@ -16,7 +16,8 @@
 * Alt-drag duplication needs Alt held when the drag starts.
 * Rectangle corner radius has no UI control.
 * Clipboard is internal to the app.
-* No appearance stack (one fill + one stroke), no stroke expansion/offset path, no blend modes, no grid, no anchor/path snapping, rulers are px only.
+* No appearance stack (one fill + one stroke), no blend modes, no grid, no anchor/path snapping, rulers are px only.
+* Expand Stroke / Offset Path produce polygonal approximations of curved outlines (many anchors); offset keeps the original object.
 * Boolean operations use fill geometry only; strokes are ignored. Result takes one operand's look.
 * Isolation mode is for groups only and only signalled in the status bar and dimming.
 * Layers panel: only top-level objects can be drag-reordered; capped at 300 rows per layer; not virtualised. The whole UI re-renders on each pointer event (fine at current sizes).

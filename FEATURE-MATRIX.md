@@ -26,7 +26,8 @@ Tests: **U** unit/interaction (Vitest) · **E** Playwright browser · **X** Elec
 | Rulers, guides (drag from ruler, move, delete), snapping to guides/artboards/objects | ✅ | U, E | No grid, no anchor snapping, px units only |
 | Isolation mode | ✅ | U | Group-level only |
 | Multiple artboards (add, size, presets, per-artboard export) | ✅ | U, E | |
-| Appearance panel (multiple fills/strokes), stroke expansion, offset path | ⬜ | | |
+| Expand Stroke (caps, joins, miter limit, dashes) and Offset Path (grow/shrink) | ✅ | U, E | Outlines are polygonal approximations of curves (0.05 unit flatness) |
+| Appearance panel (multiple fills/strokes) | ⬜ | | |
 | Geometric edge-case regression tests | ✅ | U | Beziers, booleans, hit-testing, compound paths |
 
 ## Phase 3 – typography (core complete, editing UX basic)

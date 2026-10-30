@@ -8,7 +8,7 @@ type Entry = string | '-';
 const MENUS: { label: string; items: Entry[] }[] = [
   { label: 'File', items: ['file.new', 'file.open', '-', 'file.save', 'file.saveAs', '-', 'file.openTemplate', '-', 'file.importSvg', 'file.placeSvg', 'file.trace', '-', 'file.exportSvg', 'file.exportPng', 'file.batch', '-', 'file.close'] },
   { label: 'Edit', items: ['edit.undo', 'edit.redo', '-', 'edit.cut', 'edit.copy', 'edit.paste', 'edit.pasteInPlace', '-', 'edit.duplicate', 'edit.delete', '-', 'edit.selectAll', 'edit.deselect'] },
-  { label: 'Object', items: ['object.group', 'object.ungroup', '-', 'object.front', 'object.forward', 'object.backward', 'object.back', '-', 'object.unite', 'object.subtract', 'object.intersect', 'object.exclude', '-', 'object.makeCompound', 'object.releaseCompound', '-', 'object.makeClip', 'object.releaseClip', '-', 'object.outlines', 'object.textOnPath', 'object.releaseTextPath', '-', 'object.toPath', 'object.cleanup', 'object.colors', 'object.swap'] },
+  { label: 'Object', items: ['object.group', 'object.ungroup', '-', 'object.front', 'object.forward', 'object.backward', 'object.back', '-', 'object.unite', 'object.subtract', 'object.intersect', 'object.exclude', '-', 'object.makeCompound', 'object.releaseCompound', '-', 'object.makeClip', 'object.releaseClip', '-', 'object.outlines', 'object.textOnPath', 'object.releaseTextPath', '-', 'object.toPath', 'object.expandStroke', 'object.offsetPath', 'object.cleanup', 'object.colors', 'object.swap'] },
   { label: 'View', items: ['view.zoomIn', 'view.zoomOut', 'view.fit', 'view.fitAll', 'view.actual', '-', 'view.rulers', 'view.snap', 'view.clearGuides'] },
   { label: 'Help', items: ['help.shortcuts', 'help.about'] },
 ];

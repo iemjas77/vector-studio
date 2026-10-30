@@ -2,7 +2,7 @@ import {
   History, addElement, addArtboard, addLayer, convertToPath, createDocument, defaultStroke, duplicateElements, elementBounds, elementNodes,
   elementsInRect, getElement, groupElements, hitTest, insertCopies, locate, moveLayer, parentMatrix, patchArtboard, patchElements, patchLayer,
   removeArtboard, removeElements, removeLayer, reorder, selectionBounds, setPathNodes, solid, transformWorld, ungroupElements, worldMatrix,
-  allElementIds, moveElement, solidOf, hitTestChildren, childrenInRect, addGuide, moveGuide, removeGuide, clearGuides, booleanOperation, makeCompoundPath, releaseCompoundPaths, type BooleanOp,
+  expandStroke, offsetPath, allElementIds, moveElement, solidOf, hitTestChildren, childrenInRect, addGuide, moveGuide, removeGuide, clearGuides, booleanOperation, makeCompoundPath, releaseCompoundPaths, type BooleanOp,
   patchText, textOnPath, releaseTextPath, type TextPatch,
   alignElements, distributeElements, makeClippingMask, releaseClippingMask, type AlignMode, type DistributeMode,
   type Artboard, type Element, type Paint, type PathElement, type Stroke, type VDocument, type ZOrder,
@@ -495,6 +495,25 @@ export class Editor {
     const ids = this.selection.filter((id) => { const e = getElement(this.doc, id); return e?.type === 'group' && e.clip; });
     if (!ids.length) return;
     this.apply('Release clipping mask', (d) => ids.forEach((id) => releaseClippingMask(d, id)));
+  }
+
+  /** Turn strokes of the selected shapes into filled outlines. Returns how many objects were expanded. */
+  expandStrokes(): number {
+    const ids = this.selection.filter((id) => { const e = getElement(this.doc, id); return !!e && e.type !== 'group' && !!e.stroke && e.stroke.width > 0; });
+    if (!ids.length) { this.setStatus('Select a shape that has a stroke to expand'); return 0; }
+    const out: string[] = [];
+    this.apply('Expand stroke', (d) => { for (const id of ids) { const r = expandStroke(d, id); if (r) out.push(r); } });
+    this.select(out);
+    return out.length;
+  }
+  /** Grow (positive) or shrink (negative) the selected shapes' outlines. New paths are placed above the originals. */
+  offsetSelection(distance: number, join: 'round' | 'miter' | 'bevel'): number {
+    const ids = [...this.selection];
+    const out: string[] = [];
+    this.apply('Offset path', (d) => { for (const id of ids) { const r = offsetPath(d, id, distance, join); if (r) out.push(r); } });
+    if (!out.length) { this.setStatus('Nothing to offset (select closed shapes; shrinking may remove them)'); return 0; }
+    this.select(out);
+    return out.length;
   }
 
   convertSelectionToPaths(): void {

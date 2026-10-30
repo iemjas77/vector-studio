@@ -171,3 +171,25 @@ export function BatchDialog() {
     </Dlg>
   );
 }
+
+export function OffsetDialog() {
+  const { ed } = useApp();
+  const [dist, setDist] = useState('10');
+  const [join, setJoin] = useState<'round' | 'miter' | 'bevel'>('round');
+  const d = parseFloat(dist);
+  const ok = isFinite(d) && d !== 0 && Math.abs(d) <= 5000;
+  return (
+    <Dlg title="Offset Path" onClose={close} testId="dialog-offset">
+      <div className="flex flex-col gap-3" style={{ minWidth: 340 }}>
+        <div className="row"><span style={{ width: 70 }}>Distance</span><input type="text" data-testid="offset-distance" style={{ width: 70 }} value={dist} onChange={(e) => setDist(e.target.value)} /><span>units (negative shrinks)</span></div>
+        <div className="row"><span style={{ width: 70 }}>Corners</span>
+          <select data-testid="offset-join" value={join} onChange={(e) => setJoin(e.target.value as 'round')}><option value="round">Round</option><option value="miter">Miter</option><option value="bevel">Bevel</option></select></div>
+        {!ok && <div style={{ color: '#ff9a9a' }} data-testid="offset-error">Enter a distance other than 0 (at most 5000).</div>}
+        <div className="row" style={{ justifyContent: 'flex-end' }}>
+          <button className="btn" onClick={close}>Cancel</button>
+          <button className="btn btn-primary" data-testid="offset-go" disabled={!ok} onClick={() => { if (ed.offsetSelection(d, join) > 0) close(); }}>Offset</button>
+        </div>
+      </div>
+    </Dlg>
+  );
+}

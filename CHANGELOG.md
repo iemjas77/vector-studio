@@ -2,6 +2,7 @@
 
 ## 0.2.0 – Phase 2–6 work (unreleased)
 ### Added
+* **Expand Stroke** and **Offset Path** (grow/shrink) built on Paper.js booleans.
 * **Compound paths** (file format v2, v1 migrated on load), fill rules, make/release.
 * **Boolean operations** (Paper.js): unite, minus front, intersect, exclude.
 * **Clipping masks**, **gradients** (linear/radial, stops, alpha; SVG import/export, PDF shadings), **align/distribute**, **rulers, guides and snapping**, **isolation mode**.
@@ -10,7 +11,7 @@
 * **Print-on-demand tools**: templates with guides (T-shirt 4500×5400 @ 300 ppi etc.), vector clean-up, colour reduction/replacement, batch resize & export, image tracing.
 * **Automation**: JSON action lists, headless batch CLI (`npm run build:cli`), plugin API with one bundled plugin.
 * Electron: `app://vs/` protocol (WASM fetch), system font scan, batch save to a folder, binary open.
-* Tests: 210 unit/interaction, 37 browser end-to-end (including SVG interop against Chromium), PDF checks with poppler, Electron and CLI smoke tests.
+* Tests: 220 unit/interaction, 38 browser end-to-end (including SVG interop against Chromium), PDF checks with poppler, Electron and CLI smoke tests.
 ### Fixed during development (regression tests added)
 * Layers drag-and-drop disabled for top-level rows; drop landed one slot off.
 * Dialog Escape handling; file-chooser "cancel" race on open.

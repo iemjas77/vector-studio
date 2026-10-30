@@ -212,6 +212,8 @@ export const COMMANDS: Command[] = [
   { id: 'object.textOnPath', label: 'Make Text on Path', enabled: (a) => a.ed.selectedTexts.length === 1 && a.ed.selectedElements.some((e) => e.type === 'path'), run: (a) => { a.ed.makeTextOnPath(); } },
   { id: 'object.releaseTextPath', label: 'Release Text from Path', enabled: (a) => a.ed.selectedTexts.some((t) => !!t.path), run: (a) => a.ed.releaseTextFromPath() },
   { id: 'object.toPath', label: 'Convert to Path', enabled: (a) => a.ed.selection.some((id) => { const t = getElement(a.ed.doc, id)?.type; return t === 'rect' || t === 'ellipse'; }), run: (a) => a.ed.convertSelectionToPaths() },
+  { id: 'object.expandStroke', label: 'Expand Stroke', enabled: (a) => a.ed.selectedElements.some((e) => e.type !== 'group' && !!e.stroke && e.stroke.width > 0), run: (a) => { a.ed.expandStrokes(); } },
+  { id: 'object.offsetPath', label: 'Offset Path…', enabled: hasSel, run: () => useUi.getState().openDialog('offset') },
   { id: 'object.cleanup', label: 'Clean Up Vectors…', run: () => useUi.getState().openDialog('cleanup') },
   { id: 'object.colors', label: 'Reduce / Replace Colors…', run: () => useUi.getState().openDialog('colors') },
   { id: 'object.swap', label: 'Swap Fill and Stroke', shortcut: 'Shift+X', run: (a) => a.ed.swapFillStroke() },
