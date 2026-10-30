@@ -1,4 +1,4 @@
-import { solid } from '../core/document';
+import { solid, solidOf } from '../core/document';
 import { NumField } from './controls';
 import { useApp } from './hooks';
 
@@ -10,7 +10,7 @@ export function OptionsBar() {
     <div className="row px-3 bg-panel border-b border-edge" style={{ height: 34, gap: 12 }} data-testid="optionsbar">
       <span className="text-mute" data-testid="options-tool">{ed.tool.label}</span>
       <span className="row">Fill
-        <input type="color" aria-label="Quick fill colour" data-testid="quick-fill" value={fill?.color ?? '#ffffff'} onChange={(e) => ed.setFill(solid(e.target.value, fill?.alpha ?? 1))} style={{ width: 28, height: 22, padding: 0, opacity: fill ? 1 : 0.35 }} />
+        <input type="color" aria-label="Quick fill colour" data-testid="quick-fill" value={fill ? solidOf(fill).color : '#ffffff'} onChange={(e) => ed.setFill(solid(e.target.value, fill ? solidOf(fill).alpha : 1))} style={{ width: 28, height: 22, padding: 0, opacity: fill ? 1 : 0.35 }} />
         <button className="btn" data-testid="quick-fill-none" onClick={() => ed.setFill(null)} aria-pressed={!fill}>None</button>
       </span>
       <span className="row">Stroke

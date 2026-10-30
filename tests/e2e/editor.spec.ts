@@ -398,3 +398,25 @@ test('Align panel aligns two shapes; Clipping Mask menu clips and releases', asy
   els = await elements(page);
   expect(els[0]).toMatchObject({ clip: false });
 });
+
+test('gradient fill: switch to linear, edit stops and angle, switch to radial and back to solid', async ({ page }) => {
+  await page.keyboard.press('m');
+  await dragDoc(page, 100, 100, 400, 300);
+  await page.getByTestId('swatch-ff0000').click();
+  await page.getByTestId('fill-type-linear').click();
+  let el = (await elements(page))[0] as unknown as { fill: { type: string; stops: { color: string; offset: number }[]; x1: number; x2: number } };
+  expect(el.fill.type).toBe('linear');
+  expect(el.fill.stops.map((s) => s.color)).toEqual(['#ff0000', '#ffffff']);
+  await page.getByTestId('stop-add').click();
+  await page.getByTestId('stop-offset-0').fill('0'); // keep first at 0
+  await page.getByTestId('gradient-angle').fill('90'); await page.getByTestId('gradient-angle').press('Enter');
+  el = (await elements(page))[0] as never;
+  expect(el.fill.stops).toHaveLength(3);
+  expect(Math.abs(el.fill.x2 - el.fill.x1)).toBeLessThan(1e-9); // vertical now
+  await page.getByTestId('stop-remove-2').click();
+  expect(((await elements(page))[0] as never as { fill: { stops: unknown[] } }).fill.stops).toHaveLength(2);
+  await page.getByTestId('fill-type-radial').click();
+  expect(((await elements(page))[0] as never as { fill: { type: string } }).fill.type).toBe('radial');
+  await page.getByTestId('fill-type-solid').click();
+  expect(((await elements(page))[0] as never as { fill: { type: string; color: string } }).fill).toMatchObject({ type: 'solid', color: '#ff0000' });
+});

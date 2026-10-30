@@ -2,7 +2,7 @@ import {
   History, addElement, addArtboard, addLayer, convertToPath, createDocument, defaultStroke, duplicateElements, elementBounds, elementNodes,
   elementsInRect, getElement, groupElements, hitTest, insertCopies, locate, moveLayer, parentMatrix, patchArtboard, patchElements, patchLayer,
   removeArtboard, removeElements, removeLayer, reorder, selectionBounds, setPathNodes, solid, transformWorld, ungroupElements, worldMatrix,
-  allElementIds, moveElement, booleanOperation, makeCompoundPath, releaseCompoundPaths, type BooleanOp,
+  allElementIds, moveElement, solidOf, booleanOperation, makeCompoundPath, releaseCompoundPaths, type BooleanOp,
   alignElements, distributeElements, makeClippingMask, releaseClippingMask, type AlignMode, type DistributeMode,
   type Artboard, type Element, type Paint, type PathElement, type Stroke, type VDocument, type ZOrder,
 } from '../core/document';
@@ -452,7 +452,7 @@ export class Editor {
   swapFillStroke(): void {
     const fill = this.currentFill, stroke = this.currentStroke;
     const nf = stroke ? { ...stroke.paint } : null;
-    const ns = fill ? { ...(stroke ?? defaultStroke()), paint: { ...fill } } : null;
+    const ns = fill ? { ...(stroke ?? defaultStroke()), paint: solidOf(fill) } : null;
     this.style = { fill: nf, stroke: ns };
     if (this.selection.length) {
       const ids = [...this.selection];

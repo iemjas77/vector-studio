@@ -142,3 +142,33 @@ describe('compound path rendering', () => {
     expect(px(50, 50)[3]).toBe(0);
   });
 });
+
+describe('gradient rendering', () => {
+  const grad = (x1: number, y1: number, x2: number, y2: number) => ({
+    type: 'linear' as const, x1, y1, x2, y2,
+    stops: [{ offset: 0, color: '#000000', alpha: 1 }, { offset: 1, color: '#ffffff', alpha: 1 }],
+  });
+  it('linear gradient maps to the object bounds (not the artboard) and interpolates', () => {
+    const doc = createDocument('d', 200, 100);
+    addElement(doc, createRect(100, 0, 100, 100, { fill: grad(0, 0.5, 1, 0.5), stroke: null }));
+    const { px } = render(doc, { transparent: true });
+    expect(px(102, 50)[0]).toBeLessThan(10);       // start of the box: black
+    expect(Math.abs(px(150, 50)[0] - 128)).toBeLessThan(6); // middle: mid grey
+    expect(px(197, 50)[0]).toBeGreaterThan(245);   // end: white
+    expect(px(50, 50)[3]).toBe(0);
+  });
+  it('gradient follows the element transform and radial gradients centre on the box', () => {
+    const doc = createDocument('d', 200, 200);
+    addElement(doc, createRect(0, 0, 100, 100, { fill: { type: 'radial', cx: 0.5, cy: 0.5, r: 0.5, stops: [{ offset: 0, color: '#ffffff', alpha: 1 }, { offset: 1, color: '#000000', alpha: 1 }] }, stroke: null, transform: [1, 0, 0, 1, 100, 100] }));
+    const { px } = render(doc, { transparent: true });
+    expect(px(150, 150)[0]).toBeGreaterThan(240);
+    expect(px(102, 150)[0]).toBeLessThan(25);
+  });
+  it('gradient stop alpha is honoured', () => {
+    const doc = createDocument('d', 100, 100);
+    addElement(doc, createRect(0, 0, 100, 100, { fill: { ...grad(0, 0.5, 1, 0.5), stops: [{ offset: 0, color: '#ff0000', alpha: 0 }, { offset: 1, color: '#ff0000', alpha: 1 }] }, stroke: null }));
+    const { px } = render(doc, { transparent: true });
+    expect(px(2, 50)[3]).toBeLessThan(12);
+    expect(px(97, 50)[3]).toBeGreaterThan(240);
+  });
+});

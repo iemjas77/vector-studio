@@ -1,4 +1,5 @@
-import { solid } from '../../core/document';
+import { solid, solidOf } from '../../core/document';
+import { GradientEditor, convertPaintType, cssGradient } from './Gradient';
 import { useApp } from '../hooks';
 import { useUi } from '../store';
 import { NumField } from '../controls';
@@ -23,7 +24,8 @@ export function ColorPanel() {
   const target = useUi((s) => s.colorTarget);
   const setTarget = useUi((s) => s.setColorTarget);
   const fill = ed.currentFill, stroke = ed.currentStroke;
-  const paint = target === 'fill' ? fill : stroke?.paint ?? null;
+  const fillGradient = target === 'fill' && fill && fill.type !== 'solid' ? fill : null;
+  const paint = target === 'fill' ? (fill ? solidOf(fill) : null) : stroke?.paint ?? null;
   const [hex, setHex] = useState(paint?.color ?? '');
   useEffect(() => setHex(paint?.color ?? ''), [paint?.color]);
 
@@ -44,7 +46,7 @@ export function ColorPanel() {
           <button
             aria-label="Fill" aria-pressed={target === 'fill'} data-testid="target-fill" onClick={() => setTarget('fill')}
             className={fill ? '' : 'checker'}
-            style={{ position: 'absolute', left: 0, top: 0, width: 26, height: 26, border: target === 'fill' ? '2px solid #4d9cff' : '1px solid #777', background: fill?.color, zIndex: target === 'fill' ? 2 : 1, opacity: fill ? fill.alpha : 1 }}
+            style={{ position: 'absolute', left: 0, top: 0, width: 26, height: 26, border: target === 'fill' ? '2px solid #4d9cff' : '1px solid #777', background: fill ? (fill.type === 'solid' ? fill.color : cssGradient(fill)) : undefined, zIndex: target === 'fill' ? 2 : 1, opacity: fill ? solidOf(fill).alpha : 1 }}
           />
           <button
             aria-label="Stroke" aria-pressed={target === 'stroke'} data-testid="target-stroke" onClick={() => setTarget('stroke')}
@@ -54,7 +56,16 @@ export function ColorPanel() {
         <button className="btn" data-testid="color-none" onClick={() => apply(null)} title="No fill / no stroke">None</button>
         <button className="btn" data-testid="color-swap" onClick={() => ed.swapFillStroke()} title="Swap fill and stroke (Shift+X)">⇄</button>
       </div>
-      <div className="row">
+      {target === 'fill' && (
+        <div className="row" role="group" aria-label="Fill type">
+          {(['solid', 'linear', 'radial'] as const).map((t) => (
+            <button key={t} className="btn" data-testid={`fill-type-${t}`} aria-pressed={(fill?.type ?? 'none') === t} style={{ background: (fill?.type ?? 'none') === t ? '#3d5f94' : undefined, flex: 1 }}
+              onClick={() => ed.setFill(convertPaintType(fill, t))}>{t === 'solid' ? 'Solid' : t === 'linear' ? 'Linear' : 'Radial'}</button>
+          ))}
+        </div>
+      )}
+      {fillGradient && <GradientEditor paint={fillGradient} onChange={(p) => ed.setFill(p)} />}
+      {!fillGradient && <><div className="row">
         <input type="color" data-testid="color-picker" aria-label="Colour picker" value={paint?.color ?? '#000000'} onChange={(e) => apply(e.target.value)} style={{ width: 32, height: 24, padding: 0 }} />
         <input
           type="text" data-testid="color-hex" aria-label="Hex colour" style={{ width: 78 }} value={hex}
@@ -64,6 +75,7 @@ export function ColorPanel() {
         />
         <NumField testId="color-alpha" label="α" value={paint ? paint.alpha * 100 : null} min={0} max={100} decimals={0} width={44} unit="%" disabled={!paint} onCommit={(v) => paint && apply(paint.color, v / 100)} />
       </div>
+      </>}
       <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(12, 1fr)' }} data-testid="swatches">
         {SWATCHES.map((c) => (
           <button key={c} aria-label={`Swatch ${c}`} title={c} data-testid={`swatch-${c.slice(1)}`} onClick={() => apply(c)}

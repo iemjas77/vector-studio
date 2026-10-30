@@ -124,10 +124,27 @@ describe('svg import', () => {
     if (p.type === 'path') { expect(p.extra).toHaveLength(1); expect(p.fillRule).toBe('evenodd'); }
     expect(warnings).toEqual([]);
   });
-  it('uses the first gradient stop as a flat fallback with a warning', () => {
-    const { doc, warnings } = importSvg(`<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><defs><linearGradient id="g"><stop offset="0" stop-color="#123456"/><stop offset="1" stop-color="#fff"/></linearGradient></defs><rect width="5" height="5" fill="url(#g)"/></svg>`);
-    expect(doc.layers[0].children[0]).toMatchObject({ fill: { color: '#123456' } });
-    expect(warnings[0]).toMatch(/Gradient/);
+  it('imports linear and radial gradients (bounding-box and user-space units, href stops)', () => {
+    const { doc, warnings } = importSvg(`<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+      <defs>
+        <linearGradient id="a" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ff0000"/><stop offset="50%" stop-color="#00ff00" stop-opacity=".5"/><stop offset="1" style="stop-color:#0000ff"/></linearGradient>
+        <linearGradient id="u" gradientUnits="userSpaceOnUse" x1="50" y1="0" x2="150" y2="0"><stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#fff"/></linearGradient>
+        <radialGradient id="r" xlink:href="#a" cx="0.5" cy="0.5" r="0.5"/>
+      </defs>
+      <rect width="50" height="50" fill="url(#a)"/><rect x="50" width="100" height="50" fill="url(#u)"/><circle cx="25" cy="75" r="20" fill="url(#r)"/></svg>`);
+    expect(warnings).toEqual([]);
+    const [r1, r2, c] = doc.layers[0].children;
+    if (r1.type === 'group' || r2.type === 'group' || c.type === 'group') throw new Error();
+    expect(r1.fill).toMatchObject({ type: 'linear', x1: 0, x2: 1 });
+    expect((r1.fill as { stops: { alpha: number }[] }).stops.map((s) => s.alpha)).toEqual([1, 0.5, 1]);
+    expect(r2.fill).toMatchObject({ type: 'linear', x1: 0, x2: 1 }); // 50..150 over a 50..150 box
+    expect(c.fill).toMatchObject({ type: 'radial' });
+    expect((c.fill as { stops: unknown[] }).stops).toHaveLength(3); // inherited through href
+  });
+  it('warns about gradientTransform and missing gradients', () => {
+    const { warnings } = importSvg(`<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><defs><linearGradient id="g" gradientTransform="rotate(45)"><stop offset="0" stop-color="red"/><stop offset="1" stop-color="blue"/></linearGradient></defs><rect width="5" height="5" fill="url(#g)"/><rect width="5" height="5" fill="url(#nope)"/></svg>`);
+    expect(warnings.join('|')).toMatch(/gradientTransform/);
+    expect(warnings.join('|')).toMatch(/not found/);
   });
 });
 
@@ -169,5 +186,22 @@ describe('svg export → import round trip', () => {
     const doc = createDocument();
     doc.artboards[0].background = null;
     expect(exportSvg(doc)).not.toContain('artboard-background');
+  });
+});
+
+describe('gradient svg round trip', () => {
+  it('exports defs and re-imports identical gradients', () => {
+    const doc = createDocument('g', 100, 100);
+    const lin = { type: 'linear' as const, x1: 0, y1: 0, x2: 1, y2: 1, stops: [{ offset: 0, color: '#ff0000', alpha: 1 }, { offset: 0.4, color: '#00ff00', alpha: 0.5 }, { offset: 1, color: '#0000ff', alpha: 1 }] };
+    const rad = { type: 'radial' as const, cx: 0.5, cy: 0.5, r: 0.5, stops: [{ offset: 0, color: '#ffffff', alpha: 1 }, { offset: 1, color: '#000000', alpha: 1 }] };
+    doc.layers[0].children.push(createRect(0, 0, 50, 50, { fill: lin }), createEllipse(75, 75, 20, 20, { fill: rad }));
+    const svg = exportSvg(doc);
+    expect(svg).toContain('<linearGradient');
+    expect(svg).toContain('<radialGradient');
+    const { doc: back, warnings } = importSvg(svg);
+    expect(warnings).toEqual([]);
+    const [a, b] = back.layers[0].children;
+    expect(a).toMatchObject({ fill: lin });
+    expect(b).toMatchObject({ fill: rad });
   });
 });

@@ -385,7 +385,7 @@ describe('direct selection', () => {
     drag(e, 200, 200, 260, 240);
     const p = e.pathOf(r.id)!;
     expect(p).not.toBeNull();
-    expect(p.fill?.color).toBe('#ff0000');
+    expect(p.fill).toMatchObject({ color: '#ff0000' });
     expect(p.nodes[2]).toMatchObject({ x: 260, y: 240 });
     expect(p.nodes[0]).toMatchObject({ x: 100, y: 100 });
     e.undo();

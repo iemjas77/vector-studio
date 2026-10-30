@@ -1,6 +1,7 @@
-import { elementBounds, elementSubpaths, type Artboard, type Element, type Paint, type Stroke, type VDocument } from '../core/document';
+import { elementBounds, elementSubpaths, type Artboard, type Element, type SolidPaint, type Stroke, type VDocument, type GradientPaint, solidOf } from '../core/document';
 import type { PathNode, Rect } from '../core/geometry/types';
-import { rectsIntersect, transformRect, IDENTITY } from '../core/geometry/matrix';
+import { rectsIntersect, transformRect, unionRect, IDENTITY } from '../core/geometry/matrix';
+import { pathBounds } from '../core/geometry/path';
 
 /**
  * Canvas2D renderer. Pure function of (document, context): no DOM access beyond the
@@ -19,7 +20,7 @@ export interface RenderOptions {
   cull?: Rect;
 }
 
-export const rgba = (p: Paint): string => {
+export const rgba = (p: SolidPaint): string => {
   const r = parseInt(p.color.slice(1, 3), 16), g = parseInt(p.color.slice(3, 5), 16), b = parseInt(p.color.slice(5, 7), 16);
   return p.alpha >= 1 ? p.color : `rgba(${r},${g},${b},${p.alpha})`;
 };
@@ -60,13 +61,39 @@ function drawShape(ctx: CanvasRenderingContext2D, el: Exclude<Element, { type: '
   if (el.type === 'rect' && el.rx === 0) ctx.rect(el.x, el.y, el.w, el.h);
   else for (const sp of elementSubpaths(el)) tracePath(ctx, sp.nodes, sp.closed);
   if (el.fill && (el.type !== 'path' || el.closed || el.nodes.length > 2 || el.extra.length > 0)) {
-    ctx.fillStyle = rgba(el.fill);
-    ctx.fill(el.type === 'path' ? el.fillRule : 'nonzero');
+    const rule = el.type === 'path' ? el.fillRule : 'nonzero';
+    if (el.fill.type === 'solid') {
+      ctx.fillStyle = rgba(el.fill);
+      ctx.fill(rule);
+    } else {
+      const b = shapeBounds(el);
+      if (!b || b.w <= 0 || b.h <= 0) { ctx.fillStyle = rgba(solidOf(el.fill)); ctx.fill(rule); } else {
+        // The gradient is defined in a unit box; map it onto the object's bounds only for this fill (the path is already built).
+        ctx.save();
+        ctx.translate(b.x, b.y);
+        ctx.scale(b.w, b.h);
+        ctx.fillStyle = unitGradient(ctx, el.fill);
+        ctx.fill(rule);
+        ctx.restore();
+      }
+    }
   }
   if (el.stroke && el.stroke.width > 0) {
     applyStroke(ctx, el.stroke);
     ctx.stroke();
   }
+}
+
+function shapeBounds(el: Exclude<Element, { type: 'group' }>): Rect | null {
+  let r: Rect | null = null;
+  for (const sp of elementSubpaths(el)) r = unionRect(r, pathBounds(sp.nodes, sp.closed));
+  return r;
+}
+
+function unitGradient(ctx: CanvasRenderingContext2D, g: GradientPaint): CanvasGradient {
+  const grad = g.type === 'linear' ? ctx.createLinearGradient(g.x1, g.y1, g.x2, g.y2) : ctx.createRadialGradient(g.cx, g.cy, 0, g.cx, g.cy, g.r);
+  for (const s of g.stops) grad.addColorStop(Math.min(1, Math.max(0, s.offset)), rgba({ type: 'solid', color: s.color, alpha: s.alpha }));
+  return grad;
 }
 
 function needsCompositing(el: Element): boolean {

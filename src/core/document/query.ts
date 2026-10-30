@@ -1,5 +1,6 @@
 import { apply, boundsOfPoints, invert, multiply, unionRect, IDENTITY } from '../geometry/matrix';
 import { elementSubpaths } from './shape';
+import { paintVisible } from './paint';
 import { flattenPath, pathBounds, pointInPolygon, nearestOnPath, windingNumber } from '../geometry/path';
 import type { Matrix, Rect, Vec } from '../geometry/types';
 import type { Element, Layer, ShapeElement, VDocument } from './types';
@@ -144,10 +145,10 @@ export function hitElement(el: Element, p: Vec, tol: number): boolean {
   }
   const subs = elementSubpaths(el).filter((s) => s.nodes.length > 0);
   if (subs.length === 0) return false;
-  if (el.fill && el.fill.alpha > 0 && el.type === 'path' && el.extra.length > 0) {
+  if (paintVisible(el.fill) && el.type === 'path' && el.extra.length > 0) {
     const polys = subs.map((s) => flattenPath(s.nodes, true, 0.1 / scale));
     if (insideCompound(polys, lp, el.fillRule)) return true;
-  } else if (el.fill && el.fill.alpha > 0 && subs[0].closed) {
+  } else if (paintVisible(el.fill) && subs[0].closed) {
     const nodes = subs[0].nodes;
     if (el.type === 'rect') {
       if (el.rx === 0) {

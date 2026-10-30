@@ -3,11 +3,11 @@ import type { PathNode } from '../geometry/types';
 import { newId } from './ids';
 import {
   FORMAT_NAME, FORMAT_VERSION,
-  type Artboard, type EllipseElement, type GroupElement, type Layer, type Paint, type PathElement,
+  type Artboard, type EllipseElement, type GroupElement, type Layer, type SolidPaint, type PathElement,
   type RectElement, type Stroke, type VDocument, type Element,
 } from './types';
 
-export const solid = (color: string, alpha = 1): Paint => ({ type: 'solid', color, alpha });
+export const solid = (color: string, alpha = 1): SolidPaint => ({ type: 'solid', color, alpha });
 
 export const defaultStroke = (color = '#000000', width = 1): Stroke => ({
   paint: solid(color), width, cap: 'butt', join: 'miter', miterLimit: 4, dash: [],

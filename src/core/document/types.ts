@@ -10,13 +10,33 @@ export interface SolidPaint {
   /** 0..1 */
   alpha: number;
 }
-export type Paint = SolidPaint;
+export interface GradientStop {
+  /** 0..1 */
+  offset: number;
+  color: string;
+  alpha: number;
+}
+/** Gradient geometry is in object-bounding-box units (0..1), so it follows the object when it is resized. */
+export interface LinearGradientPaint {
+  type: 'linear';
+  stops: GradientStop[];
+  x1: number; y1: number; x2: number; y2: number;
+}
+export interface RadialGradientPaint {
+  type: 'radial';
+  stops: GradientStop[];
+  cx: number; cy: number;
+  /** Radius as a fraction of the bounding box (the circle becomes an ellipse for non-square boxes, as in SVG). */
+  r: number;
+}
+export type GradientPaint = LinearGradientPaint | RadialGradientPaint;
+export type Paint = SolidPaint | GradientPaint;
 
 export type LineCap = 'butt' | 'round' | 'square';
 export type LineJoin = 'miter' | 'round' | 'bevel';
 
 export interface Stroke {
-  paint: Paint;
+  paint: SolidPaint;
   width: number;
   cap: LineCap;
   join: LineJoin;

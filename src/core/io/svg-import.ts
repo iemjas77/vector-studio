@@ -7,6 +7,9 @@ import {
 } from '../document';
 import { node } from '../geometry/path';
 import { parseColor } from './colors';
+import { elementSubpaths, solidOf } from '../document';
+import { pathBounds } from '../geometry/path';
+import { unionRect } from '../geometry/matrix';
 import { parsePathData } from './svg-path';
 
 export interface SvgImportResult {
@@ -72,7 +75,9 @@ const childrenOf = (x: XNode): XNode[] => {
 
 class Importer {
   warnings = new Set<string>();
-  gradients = new Map<string, string>();
+  gradDefs = new Map<string, { tag: string; a: Record<string, string>; stops: XNode[] }>();
+  /** Gradients in userSpaceOnUse units that must be normalised to the element's bounds once it exists. */
+  pendingUser = new Map<Paint, { tag: string; a: Record<string, string> }>();
   clips = new Map<string, XNode[]>();
   warn(m: string) { this.warnings.add(m); }
 
@@ -86,12 +91,7 @@ class Importer {
         else this.clips.set(a.id, childrenOf(x));
       }
       if ((tag === 'linearGradient' || tag === 'radialGradient') && a.id) {
-        const stop = childrenOf(x).find((c) => tagOf(c) === 'stop');
-        if (stop) {
-          const sa = attrsOf(stop);
-          const col = sa['stop-color'] ?? /stop-color\s*:\s*([^;]+)/.exec(sa.style ?? '')?.[1];
-          if (col && parseColor(col)) this.gradients.set(a.id, col);
-        }
+        this.gradDefs.set(a.id, { tag, a, stops: childrenOf(x).filter((c) => tagOf(c) === 'stop') });
       }
       this.collectDefs(childrenOf(x));
     }
@@ -125,12 +125,7 @@ class Importer {
   paint(value: string, opacity: number): Paint | null {
     let v = value.trim();
     const url = /^url\(\s*['"]?#([^)'"]+)['"]?\s*\)/.exec(v);
-    if (url) {
-      const g = this.gradients.get(url[1]);
-      this.warn('Gradient fills are not supported yet; replaced with the first gradient colour');
-      if (!g) return null;
-      v = g;
-    }
+    if (url) return this.gradient(url[1], opacity);
     if (v === 'currentColor') v = '#000000';
     const c = parseColor(v);
     if (!c) {
@@ -140,9 +135,66 @@ class Importer {
     return solid(c.color, Math.max(0, Math.min(1, c.alpha * (isFinite(opacity) ? opacity : 1))));
   }
 
+  /** Resolves xlink:href chains: attributes and stops fall back to the referenced gradient. */
+  private resolveGradient(id: string, depth = 0): { tag: string; a: Record<string, string>; stops: XNode[] } | null {
+    const g = this.gradDefs.get(id);
+    if (!g) return null;
+    const href = (g.a.href ?? g['a']['xlink:href'])?.replace(/^#/, '');
+    if (!href || depth > 8) return g;
+    const base = this.resolveGradient(href, depth + 1);
+    if (!base) return g;
+    return { tag: g.tag, a: { ...base.a, ...g.a, id }, stops: g.stops.length ? g.stops : base.stops };
+  }
+
+  private gradient(id: string, opacity: number): Paint | null {
+    const g = this.resolveGradient(id);
+    if (!g) { this.warn(`Gradient "${id}" was not found; fill ignored`); return null; }
+    const stops = g.stops.map((s) => {
+      const sa = attrsOf(s);
+      const css: Record<string, string> = {};
+      for (const d of (sa.style ?? '').split(';')) { const k = d.indexOf(':'); if (k > 0) css[d.slice(0, k).trim()] = d.slice(k + 1).trim(); }
+      const col = parseColor(css['stop-color'] ?? sa['stop-color'] ?? '#000000') ?? { color: '#000000', alpha: 1 };
+      const o = (sa.offset ?? '0').trim();
+      const offset = Math.min(1, Math.max(0, o.endsWith('%') ? parseFloat(o) / 100 : parseFloat(o)));
+      const so = parseFloat(css['stop-opacity'] ?? sa['stop-opacity'] ?? '1');
+      return { offset: isFinite(offset) ? offset : 0, color: col.color, alpha: Math.max(0, Math.min(1, col.alpha * (isFinite(so) ? so : 1) * opacity)) };
+    }).sort((p, q) => p.offset - q.offset);
+    if (stops.length === 0) return null;
+    if (stops.length === 1) stops.push({ ...stops[0], offset: 1 });
+    if (g.a.gradientTransform) this.warn('gradientTransform is not supported yet; gradient drawn without it');
+    if (g.a.spreadMethod && g.a.spreadMethod !== 'pad') this.warn('Gradient spreadMethod other than "pad" is not supported');
+    const user = g.a.gradientUnits === 'userSpaceOnUse';
+    const num = (k: string, def: number) => { const v = parseFloat(g.a[k] ?? ''); return isFinite(v) ? (g.a[k]!.trim().endsWith('%') ? v / 100 : v) : def; };
+    let paint: Paint;
+    if (g.tag === 'linearGradient') paint = { type: 'linear', stops, x1: num('x1', 0), y1: num('y1', 0), x2: num('x2', 1), y2: num('y2', 0) };
+    else {
+      if (g.a.fx !== undefined || g.a.fy !== undefined) this.warn('Radial gradient focal points (fx/fy) are not supported; centred instead');
+      paint = { type: 'radial', stops, cx: num('cx', 0.5), cy: num('cy', 0.5), r: Math.max(1e-6, num('r', 0.5)) };
+    }
+    if (user) this.pendingUser.set(paint, { tag: g.tag, a: g.a });
+    return paint;
+  }
+
+  /** Converts userSpaceOnUse gradient coordinates to bounding-box fractions using the finished element's bounds. */
+  private fixGradient(el: Element): void {
+    if (el.type === 'group' || !el.fill || el.fill.type === 'solid') return;
+    if (!this.pendingUser.has(el.fill)) return;
+    let b: { x: number; y: number; w: number; h: number } | null = null;
+    for (const sp of elementSubpaths(el)) {
+      const pb = pathBounds(sp.nodes, sp.closed);
+      if (pb) b = b ? unionRect(b, pb) : pb;
+    }
+    this.pendingUser.delete(el.fill);
+    if (!b || b.w <= 0 || b.h <= 0) { el.fill = solidOf(el.fill); return; }
+    const f = el.fill;
+    const nx = (v: number) => (v - b.x) / b.w, ny = (v: number) => (v - b.y) / b.h;
+    if (f.type === 'linear') { f.x1 = nx(f.x1); f.y1 = ny(f.y1); f.x2 = nx(f.x2); f.y2 = ny(f.y2); } else { f.cx = nx(f.cx); f.cy = ny(f.cy); f.r = f.r / b.w; }
+  }
+
   appearance(st: Style) {
     const fill = this.paint(st.fill, st.fillOpacity);
-    const sp = this.paint(st.stroke, st.strokeOpacity);
+    let sp = this.paint(st.stroke, st.strokeOpacity);
+    if (sp && sp.type !== 'solid') { this.warn('Gradient strokes are not supported; first gradient colour used'); sp = solidOf(sp); }
     const stroke: Stroke | null = sp && st.strokeWidth > 0
       ? { ...defaultStroke(), paint: sp, width: st.strokeWidth, cap: st.cap, join: st.join, miterLimit: st.miter, dash: st.dash }
       : null;
@@ -175,6 +227,7 @@ class Importer {
       transform: parseTransform(a.transform),
     };
     const named = <T extends Element>(el: T, def: string): T => {
+      this.fixGradient(el);
       el.name = common.name || def;
       el.opacity = common.opacity;
       el.transform = common.transform;

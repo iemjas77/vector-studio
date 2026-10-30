@@ -11,9 +11,15 @@ export class DocumentFormatError extends Error {
 const num = z.number().finite();
 const matrix = z.tuple([num, num, num, num, num, num]);
 const color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
-const paint = z.object({ type: z.literal('solid'), color, alpha: num.min(0).max(1) });
+const solidPaint = z.object({ type: z.literal('solid'), color, alpha: num.min(0).max(1) });
+const stops = z.array(z.object({ offset: num.min(0).max(1), color, alpha: num.min(0).max(1) })).min(2);
+const paint = z.discriminatedUnion('type', [
+  solidPaint,
+  z.object({ type: z.literal('linear'), stops, x1: num, y1: num, x2: num, y2: num }),
+  z.object({ type: z.literal('radial'), stops, cx: num, cy: num, r: num.positive() }),
+]);
 const stroke = z.object({
-  paint,
+  paint: solidPaint,
   width: num.min(0),
   cap: z.enum(['butt', 'round', 'square']),
   join: z.enum(['miter', 'round', 'bevel']),
