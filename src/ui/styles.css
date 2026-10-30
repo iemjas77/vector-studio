@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #1e1e1e;
+  --color-panel: #2a2a2a;
+  --color-panel2: #323232;
+  --color-edge: #3d3d3d;
+  --color-ink: #e6e6e6;
+  --color-mute: #9a9a9a;
+  --color-accent: #4d9cff;
+  --color-danger: #ff6b6b;
+}
+
+html, body, #root { height: 100%; margin: 0; }
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font: 12px/1.35 system-ui, "Segoe UI", sans-serif;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+button { font: inherit; color: inherit; }
+input, select { font: inherit; color: inherit; }
+input[type="text"], input[type="number"], select, .field {
+  background: #1b1b1b; border: 1px solid var(--color-edge); border-radius: 3px; padding: 2px 5px; min-width: 0;
+  user-select: text; -webkit-user-select: text;
+}
+input:focus, select:focus { outline: 1px solid var(--color-accent); outline-offset: -1px; }
+input:disabled { opacity: .45; }
+.btn { background: var(--color-panel2); border: 1px solid var(--color-edge); border-radius: 3px; padding: 2px 8px; cursor: pointer; }
+.btn:hover:not(:disabled) { background: #3b3b3b; }
+.btn:disabled { opacity: .4; cursor: default; }
+.btn-primary { background: #2f6fd0; border-color: #3d82ea; }
+.btn-primary:hover:not(:disabled) { background: #3a7de3; }
+.icon-btn { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 3px; cursor: pointer; background: transparent; border: 0; }
+.icon-btn:hover { background: #3a3a3a; }
+.icon-btn[aria-pressed="true"] { background: #3d5f94; }
+.menu-pop { position: absolute; top: 100%; left: 0; z-index: 60; min-width: 230px; background: #2e2e2e; border: 1px solid #4a4a4a; border-radius: 4px; padding: 4px 0; box-shadow: 0 6px 20px rgba(0,0,0,.5); }
+.menu-item { display: flex; justify-content: space-between; gap: 24px; width: 100%; padding: 4px 14px; text-align: left; background: transparent; border: 0; cursor: pointer; }
+.menu-item:hover:not(:disabled) { background: var(--color-accent); color: #fff; }
+.menu-item:disabled { opacity: .4; cursor: default; }
+.menu-sep { height: 1px; background: #444; margin: 4px 0; }
+.panel-head { display: flex; align-items: center; gap: 6px; padding: 5px 8px; background: var(--color-panel2); border-bottom: 1px solid var(--color-edge); cursor: pointer; font-weight: 600; letter-spacing: .02em; }
+.row { display: flex; align-items: center; gap: 6px; }
+.lbl { color: var(--color-mute); width: 14px; text-align: right; }
+.layer-row { display: flex; align-items: center; gap: 4px; padding: 2px 6px; border-bottom: 1px solid #2f2f2f; cursor: default; }
+.layer-row:hover { background: #333; }
+.layer-row.sel { background: #35507a; }
+.layer-row.drop-above { box-shadow: inset 0 2px 0 var(--color-accent); }
+.layer-row.drop-into { outline: 1px solid var(--color-accent); outline-offset: -1px; }
+.checker { background-image: linear-gradient(45deg,#777 25%,transparent 25%),linear-gradient(-45deg,#777 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#777 75%),linear-gradient(-45deg,transparent 75%,#777 75%); background-size: 8px 8px; background-position: 0 0,0 4px,4px -4px,-4px 0; background-color: #bbb; }
+.dialog-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 100; display: flex; align-items: center; justify-content: center; }
+.dialog { background: var(--color-panel); border: 1px solid #555; border-radius: 6px; padding: 16px; min-width: 380px; max-width: 560px; max-height: 85vh; overflow: auto; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
+.dialog h2 { margin: 0 0 12px; font-size: 14px; }
+.toast { position: fixed; bottom: 34px; left: 50%; transform: translateX(-50%); z-index: 90; padding: 6px 14px; border-radius: 4px; background: #333; border: 1px solid #555; max-width: 70vw; }
+.toast.error { border-color: var(--color-danger); color: #ffb3b3; }
+.toast.warn { border-color: #e0b341; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #4a4a4a; border-radius: 5px; border: 2px solid var(--color-panel); }

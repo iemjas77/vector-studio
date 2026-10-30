@@ -128,7 +128,9 @@ export function moveElement(doc: VDocument, id: string, layerId: string, index: 
   const world = worldMatrix(doc, id);
   const [el] = loc.siblings.splice(loc.index, 1);
   if (loc.parents.length) el.transform = world; // leaving a group: bake the group transform into the element
-  target.children.splice(Math.min(index, target.children.length), 0, el);
+  // `index` is expressed in the list as it was before the move; removal shifts later slots down by one.
+  const at = loc.siblings === target.children && loc.index < index ? index - 1 : index;
+  target.children.splice(Math.max(0, Math.min(at, target.children.length)), 0, el);
 }
 
 export function groupElements(doc: VDocument, ids: readonly string[]): string | null {

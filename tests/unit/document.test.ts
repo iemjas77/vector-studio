@@ -208,6 +208,19 @@ describe('operations', () => {
     expect(doc.layers[1].children[0].id).toBe(id);
     expect(worldBounds(doc, id)).toEqual(b);
   });
+  it('moveElement reorders within a layer using pre-move indices', () => {
+    const doc = createDocument();
+    const [a, b, c] = [createRect(0, 0, 1, 1), createRect(0, 0, 1, 1), createRect(0, 0, 1, 1)];
+    doc.layers[0].children.push(a, b, c);
+    const lid = doc.layers[0].id;
+    const order = () => doc.layers[0].children.map((e) => e.id);
+    moveElement(doc, a.id, lid, 2); // just above b (index of b + 1)
+    expect(order()).toEqual([b.id, a.id, c.id]);
+    moveElement(doc, c.id, lid, 0);
+    expect(order()).toEqual([c.id, b.id, a.id]);
+    moveElement(doc, c.id, lid, 3); // to the very top
+    expect(order()).toEqual([b.id, a.id, c.id]);
+  });
   it('a document always keeps one layer', () => {
     const doc = createDocument();
     removeLayer(doc, doc.layers[0].id);

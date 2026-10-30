@@ -36,6 +36,8 @@ export class Editor {
   clipboard: Element[] = [];
   /** Name shown in the title bar / used for save. */
   fileName: string | null = null;
+  /** Full path when known (Electron). */
+  filePath: string | null = null;
   version = 0;
   hover: Vec | null = null;
   status = '';
