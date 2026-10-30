@@ -3,6 +3,7 @@ import {
   elementsInRect, getElement, groupElements, hitTest, insertCopies, locate, moveLayer, parentMatrix, patchArtboard, patchElements, patchLayer,
   removeArtboard, removeElements, removeLayer, reorder, selectionBounds, setPathNodes, solid, transformWorld, ungroupElements, worldMatrix,
   allElementIds, moveElement, solidOf, hitTestChildren, childrenInRect, addGuide, moveGuide, removeGuide, clearGuides, booleanOperation, makeCompoundPath, releaseCompoundPaths, type BooleanOp,
+  patchText, textOnPath, releaseTextPath, type TextPatch,
   alignElements, distributeElements, makeClippingMask, releaseClippingMask, type AlignMode, type DistributeMode,
   type Artboard, type Element, type Paint, type PathElement, type Stroke, type VDocument, type ZOrder,
 } from '../core/document';
@@ -38,6 +39,8 @@ export class Editor {
   activeLayerId: string;
   activeArtboardId: string;
   style: DefaultStyle = { fill: solid('#ffffff'), stroke: defaultStroke('#000000', 1) };
+  /** True once the user picked a fill themselves; new text uses it, otherwise text is black (the default fill is white). */
+  fillChosen = false;
   clipboard: Element[] = [];
   /** Name shown in the title bar / used for save. */
   fileName: string | null = null;
@@ -52,6 +55,8 @@ export class Editor {
   rubber: Rect | null = null;
   penPreview: OverlayModel['pen'] = null;
   dragging = false;
+  /** Bumped when the UI should focus the text editor in the Typography panel. */
+  textFocusTick = 0;
   /** Group being edited in isolation mode (only its children can be picked; the rest is dimmed). */
   isolation: string | null = null;
   // Rulers, guides, snapping
@@ -493,9 +498,45 @@ export class Editor {
   }
 
   convertSelectionToPaths(): void {
-    const ids = this.selection.filter((id) => { const t = getElement(this.doc, id)?.type; return t === 'rect' || t === 'ellipse'; });
+    const ids = this.selection.filter((id) => { const t = getElement(this.doc, id)?.type; return t === 'rect' || t === 'ellipse' || t === 'text'; });
     if (!ids.length) return;
-    this.apply('Convert to path', (d) => ids.forEach((id) => convertToPath(d, id)));
+    const hasText = ids.some((id) => getElement(this.doc, id)?.type === 'text');
+    this.apply(hasText ? 'Create outlines' : 'Convert to path', (d) => ids.forEach((id) => convertToPath(d, id)));
+  }
+
+  // ---- text ----
+  requestTextFocus(): void { this.textFocusTick++; this.emit(); }
+  get selectedTexts(): Extract<Element, { type: 'text' }>[] {
+    return this.selectedElements.filter((e): e is Extract<Element, { type: 'text' }> => e.type === 'text');
+  }
+  setTextProps(patch: TextPatch, label = 'Edit text'): void {
+    const ids = this.selectedTexts.map((t) => t.id);
+    if (ids.length) this.apply(label, (d) => patchText(d, ids, patch));
+  }
+  /** Live (non-committing) edit while typing; call endTextEdit to close it as one undo step. */
+  beginTextEdit(): void { this.history.begin(); }
+  liveTextEdit(patch: TextPatch): void {
+    const ids = this.selectedTexts.map((t) => t.id);
+    if (!ids.length) return;
+    this.history.begin();
+    this.history.update((d) => patchText(d, ids, patch));
+    this.emit();
+  }
+  endTextEdit(): void { if (this.history.commit('Edit text')) this.emit(); }
+  makeTextOnPath(): boolean {
+    const texts = this.selectedTexts;
+    const path = this.selectedElements.find((e) => e.type === 'path');
+    if (texts.length !== 1 || !path) { this.setStatus('Select one text object and one path to put text on a path'); return false; }
+    let ok = false;
+    const tid = texts[0].id, pid = path.id;
+    this.apply('Text on path', (d) => { ok = textOnPath(d, tid, pid); });
+    if (ok) this.select([tid]);
+    return ok;
+  }
+  releaseTextFromPath(): void {
+    const ids = this.selectedTexts.filter((t) => t.path).map((t) => t.id);
+    if (!ids.length) return;
+    this.apply('Release text from path', (d) => ids.forEach((id) => releaseTextPath(d, id)));
   }
 
   // ---- appearance ----
@@ -515,6 +556,7 @@ export class Editor {
   get currentStroke(): Stroke | null { return this.selection.length ? this.firstShape()?.stroke ?? null : this.style.stroke; }
 
   setFill(fill: Paint | null): void {
+    this.fillChosen = true;
     this.style = { ...this.style, fill };
     if (this.selection.length) this.apply('Change fill', (d) => patchElements(d, this.selection, { fill }));
     else this.emit();

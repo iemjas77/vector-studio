@@ -1,3 +1,5 @@
+import type { FontSource } from '../core/text';
+
 export interface OpenedFile {
   name: string;
   path?: string;
@@ -19,6 +21,8 @@ export interface SaveRequest {
 /** Everything the app needs from the host: Electron on Windows, plain browser for development and tests. */
 export interface Platform {
   kind: 'electron' | 'browser';
+  /** System fonts, when the host can provide them. */
+  fontSource?: FontSource;
   openTextFile(accept: string[]): Promise<OpenedFile | null>;
   saveFile(req: SaveRequest): Promise<{ name: string; path?: string } | null>;
   /** Save several files at once (batch export). Electron asks for one folder; browsers download them one after another. Returns the saved names. */

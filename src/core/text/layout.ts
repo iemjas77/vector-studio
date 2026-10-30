@@ -165,7 +165,6 @@ function compute(el: TextElement): TextLayout {
   }
   const substituted = primary.family.toLowerCase() !== el.fontFamily.trim().toLowerCase();
   const trackPx = (size * el.tracking) / 1000;
-  const scale = size / primary.upem;
   const skew = el.italic && !primary.italic ? SKEW : 0;
   const lh = size * el.lineHeight;
   const onPath = el.path ? sampler(el.path) : null;
@@ -179,9 +178,11 @@ function compute(el: TextElement): TextLayout {
   const lines: LayoutLine[] = [];
   let glyphCount = 0;
   let maxW = 0;
+  let missing = false;
   lineTexts.forEach((lt, li) => {
     const glyphs = shapeLine(lt, primary);
     glyphCount += glyphs.length;
+    if (glyphs.some((g) => g.gid === 0)) missing = true;
     const w = lineWidth(glyphs, size, trackPx);
     maxW = Math.max(maxW, w);
     const baseline = el.y + li * lh;
@@ -225,6 +226,6 @@ function compute(el: TextElement): TextLayout {
     const bottom = el.y + (lines.length - 1) * lh - (primary.descender * size) / primary.upem;
     box = { x: left, y: top, w, h: bottom - top };
   }
-  void scale;
+  if (missing) fonts.reportMissing();
   return { subpaths, box, lines, substituted, glyphCount };
 }

@@ -301,3 +301,48 @@ export function removeGuide(doc: VDocument, id: string): void {
 export function clearGuides(doc: VDocument): void {
   if (doc.guides?.length) doc.guides = [];
 }
+
+// ---- text on path ----
+/** Bind a text object to a path: the text follows the path, and the path object is consumed. */
+export function textOnPath(doc: VDocument, textId: string, pathId: string): boolean {
+  const t = locate(doc, textId), p = locate(doc, pathId);
+  if (!t || !p || t.element.type !== 'text' || p.element.type !== 'path' || p.element.nodes.length < 2) return false;
+  const tw = worldMatrix(doc, textId), pw = worldMatrix(doc, pathId);
+  const inv = invert(tw);
+  if (!inv) return false;
+  // path local → world → text local
+  const m = multiply(inv, pw);
+  const nodes = p.element.nodes.map((n) => {
+    const pt = apply(m, n), i = applyVector(m, { x: n.inX, y: n.inY }), o = applyVector(m, { x: n.outX, y: n.outY });
+    return { x: pt.x, y: pt.y, inX: i.x, inY: i.y, outX: o.x, outY: o.y };
+  });
+  const closed = p.element.closed;
+  p.siblings.splice(p.siblings.indexOf(p.element), 1);
+  const tl = locate(doc, textId);
+  if (!tl || tl.element.type !== 'text') return false;
+  tl.element.path = { nodes, closed };
+  tl.element.pathOffset = 0;
+  return true;
+}
+
+/** Detach text from its path; the path comes back as an ordinary unfilled stroked object. */
+export function releaseTextPath(doc: VDocument, textId: string): string | null {
+  const t = locate(doc, textId);
+  if (!t || t.element.type !== 'text' || !t.element.path) return null;
+  const sp = t.element.path;
+  const path = createPath(sp.nodes.map((n) => ({ ...n })), sp.closed, { name: 'Text path', fill: null, stroke: { paint: { type: 'solid', color: '#000000', alpha: 1 }, width: 1, cap: 'butt', join: 'miter', miterLimit: 4, dash: [] }, transform: [...t.element.transform] as Matrix });
+  t.element.path = null;
+  t.siblings.splice(t.index, 0, path);
+  return path.id;
+}
+
+export type TextPatch = Partial<{
+  content: string; fontFamily: string; fontSize: number; fontWeight: number; italic: boolean; tracking: number; lineHeight: number;
+  align: 'left' | 'center' | 'right'; width: number; pathOffset: number;
+}>;
+export function patchText(doc: VDocument, ids: readonly string[], patch: TextPatch): void {
+  for (const id of ids) {
+    const loc = locate(doc, id);
+    if (loc && loc.element.type === 'text') Object.assign(loc.element, patch);
+  }
+}

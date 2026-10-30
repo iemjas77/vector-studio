@@ -1,7 +1,7 @@
 import type { PathNode, Rect, Vec } from '../core/geometry/types';
 import type { Editor } from './editor';
 
-export type ToolId = 'select' | 'direct' | 'rect' | 'ellipse' | 'pen' | 'hand' | 'zoom';
+export type ToolId = 'select' | 'direct' | 'rect' | 'ellipse' | 'pen' | 'text' | 'hand' | 'zoom';
 
 export interface PointerInfo {
   /** Document-space position. */

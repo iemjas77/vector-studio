@@ -82,6 +82,7 @@ export function selectTool(): Tool {
       const hit = ed.hit(e.p, false);
       if (e.detail >= 2) {
         if (hit && getElement(ed.doc, hit)?.type === 'group') { ed.enterIsolation(hit); return; }
+        if (hit && getElement(ed.doc, hit)?.type === 'text') { ed.select([hit]); ed.requestTextFocus(); return; }
         if (!hit && ed.isolation) { ed.exitIsolation(); return; }
       }
       if (hit) {

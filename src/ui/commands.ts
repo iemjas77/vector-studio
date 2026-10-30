@@ -204,6 +204,9 @@ export const COMMANDS: Command[] = [
   { id: 'object.releaseCompound', label: 'Release Compound Path', shortcut: 'Ctrl+Alt+8', enabled: (a) => a.ed.selectedElements.some((e) => e.type === 'path' && e.extra.length > 0), run: (a) => a.ed.releaseCompound() },
   { id: 'object.makeClip', label: 'Make Clipping Mask', shortcut: 'Ctrl+7', enabled: (a) => a.ed.selection.length > 1, run: (a) => a.ed.makeClip() },
   { id: 'object.releaseClip', label: 'Release Clipping Mask', shortcut: 'Ctrl+Alt+7', enabled: (a) => a.ed.selectedElements.some((e) => e.type === 'group' && !!e.clip), run: (a) => a.ed.releaseClip() },
+  { id: 'object.outlines', label: 'Create Outlines', shortcut: 'Ctrl+Shift+O', enabled: (a) => a.ed.selectedTexts.length > 0, run: (a) => a.ed.convertSelectionToPaths() },
+  { id: 'object.textOnPath', label: 'Make Text on Path', enabled: (a) => a.ed.selectedTexts.length === 1 && a.ed.selectedElements.some((e) => e.type === 'path'), run: (a) => { a.ed.makeTextOnPath(); } },
+  { id: 'object.releaseTextPath', label: 'Release Text from Path', enabled: (a) => a.ed.selectedTexts.some((t) => !!t.path), run: (a) => a.ed.releaseTextFromPath() },
   { id: 'object.toPath', label: 'Convert to Path', enabled: (a) => a.ed.selection.some((id) => { const t = getElement(a.ed.doc, id)?.type; return t === 'rect' || t === 'ellipse'; }), run: (a) => a.ed.convertSelectionToPaths() },
   { id: 'object.swap', label: 'Swap Fill and Stroke', shortcut: 'Shift+X', run: (a) => a.ed.swapFillStroke() },
 
@@ -222,6 +225,7 @@ export const COMMANDS: Command[] = [
   tool('rect', 'Rectangle Tool', 'M'),
   tool('ellipse', 'Ellipse Tool', 'L'),
   tool('pen', 'Pen Tool', 'P'),
+  tool('text', 'Type Tool', 'T'),
   tool('hand', 'Hand Tool', 'H'),
   tool('zoom', 'Zoom Tool', 'Z'),
 

@@ -21,14 +21,35 @@ try {
   await win.mouse.down();
   await win.mouse.move(box.x + 500, box.y + 350, { steps: 5 });
   await win.mouse.up();
+  // Text goes through HarfBuzz (WebAssembly), which needs the app:// protocol + CSP to be right.
+  await win.keyboard.press('t');
+  await win.mouse.click(box.x + 300, box.y + 500);
+  await win.keyboard.type('Hello');
+  await win.keyboard.press('Escape');
+  const textInfo = await win.evaluate(() => {
+    const ed = window.__vs.workspace.current;
+    const t = ed.doc.layers[0].children.find((e) => e.type === 'text');
+    return t ? { content: t.content, fonts: ed.doc && window.__vs ? true : false } : null;
+  });
+  assert.equal(textInfo?.content, 'Hello', 'text element was not created');
+  const outlineCount = await win.evaluate(async () => {
+    const ed = window.__vs.workspace.current;
+    ed.convertSelectionToPaths();
+    const p = ed.doc.layers[0].children.find((e) => e.type === 'path' && e.extra && e.extra.length >= 0 && e.name.startsWith('Hello'));
+    return p ? 1 + p.extra.length : 0;
+  });
+  assert.ok(outlineCount >= 5, `expected glyph outlines for "Hello", got ${outlineCount}`);
+  const sysFonts = await win.evaluate(() => window.vsElectron.listFonts().then((l) => l.length));
+  console.log('system fonts discovered:', sysFonts);
   await win.keyboard.press('Control+s');
   await win.waitForFunction(() => document.querySelector('[data-testid="toast"]')?.textContent?.startsWith('Saved'));
   assert.ok(existsSync(target), 'file was not written');
   const doc = JSON.parse(readFileSync(target, 'utf8'));
   assert.equal(doc.format, 'vector-studio');
-  assert.equal(doc.layers[0].children.length, 1);
+  assert.equal(doc.layers[0].children.length, 2);
   assert.equal(doc.layers[0].children[0].type, 'rect');
-  console.log('electron smoke: OK', target);
+  assert.equal(doc.layers[0].children[1].type, 'path'); // outlined text
+  console.log('electron smoke: OK (shape + HarfBuzz text + system font scan)', target);
 } finally {
   await app.close().catch(() => {});
 }

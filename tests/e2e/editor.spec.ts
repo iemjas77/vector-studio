@@ -498,3 +498,86 @@ test('export presets and formats: POD preset writes 300 ppi PNG; JPEG; multi-pag
   expect(new Set(names).size).toBe(2);
   expect(names.every((n) => n.endsWith('.png'))).toBe(true);
 });
+
+test('Type tool: create text, type into the Typography panel (one undo step), style it, outline it', async ({ page }) => {
+  await page.keyboard.press('t');
+  await clickDoc(page, 200, 300);
+  const area = page.getByTestId('text-content');
+  await expect(area).toBeFocused();
+  await page.keyboard.type('Hello World');
+  await page.getByTestId('font-size').fill('120'); await page.getByTestId('font-size').press('Enter');
+  await page.getByTestId('font-weight').selectOption('700');
+  await page.getByTestId('align-text-center').click();
+  let el = (await elements(page))[0] as unknown as { type: string; content: string; fontSize: number; fontWeight: number; align: string; x: number };
+  expect(el).toMatchObject({ type: 'text', content: 'Hello World', fontSize: 120, fontWeight: 700, align: 'center' });
+  expect(Math.abs(el.x - 200)).toBeLessThan(1.5);
+  // The frame is selectable and shows a plausible width for 11 characters at 120px.
+  const width = await page.getByTestId('prop-w').inputValue();
+  expect(+width).toBeGreaterThan(500); expect(+width).toBeLessThan(900);
+  // Typing was a single undo step.
+  await page.getByTestId('text-content').focus(); await page.keyboard.press('Escape');
+  await page.keyboard.press('Control+z'); await page.keyboard.press('Control+z'); await page.keyboard.press('Control+z'); await page.keyboard.press('Control+z');
+  el = (await elements(page))[0] as never;
+  expect(el.content).toBe('Text');
+  await page.keyboard.press('Control+Shift+z'); await page.keyboard.press('Control+Shift+z'); await page.keyboard.press('Control+Shift+z'); await page.keyboard.press('Control+Shift+z');
+  expect(((await elements(page))[0] as never as { content: string }).content).toBe('Hello World');
+  await page.getByRole('menubar').getByText('Object', { exact: true }).click();
+  await page.getByTestId('menu-object.outlines').click();
+  const out = (await elements(page))[0] as unknown as { type: string; extra: unknown[] };
+  expect(out.type).toBe('path');
+  expect(out.extra.length).toBeGreaterThan(8);
+});
+
+test('text renders ink in exports and survives save/reopen as editable text', async ({ page }, info) => {
+  const fs = await import('node:fs');
+  await page.keyboard.press('t');
+  await clickDoc(page, 100, 400);
+  await page.keyboard.type('Wg');
+  await page.getByTestId('font-size').fill('300'); await page.getByTestId('font-size').press('Enter');
+  await page.getByTestId('font-weight').selectOption('700');
+  await page.keyboard.press('Control+Shift+e');
+  await page.getByTestId('export-transparent').check();
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByTestId('export-go').click()]);
+  const out = info.outputPath('text.png'); await dl.saveAs(out);
+  const png = PNG.sync.read(readFileSync(out));
+  let ink = 0;
+  for (let y = 0; y < png.height; y += 4) for (let x = 0; x < png.width; x += 4) if (png.data[(png.width * y + x) * 4 + 3] > 200) ink++;
+  expect(ink).toBeGreaterThan(300);
+  // black text, so inked pixels are dark
+  const i0 = (() => { for (let i = 0; i < png.data.length; i += 4) if (png.data[i + 3] === 255) return i; return -1; })();
+  expect(png.data[i0]).toBeLessThan(10);
+  await page.keyboard.press('Escape'); // leave the editor field
+  const original = await docOf(page);
+  const [save] = await Promise.all([page.waitForEvent('download'), page.keyboard.press('Control+s')]);
+  const file = info.outputPath('text.vstudio'); await save.saveAs(file);
+  await page.keyboard.press('Control+n'); await page.getByTestId('new-create').click();
+  const chooser = page.waitForEvent('filechooser');
+  await page.keyboard.press('Control+o');
+  await (await chooser).setFiles(file);
+  await expect.poll(() => docOf(page)).toEqual(original);
+  void fs;
+  const t = (await elements(page))[0] as unknown as { type: string; content: string };
+  expect(t).toMatchObject({ type: 'text', content: 'Wg' });
+});
+
+test('Make Text on Path from the Object menu', async ({ page }) => {
+  await page.keyboard.press('p');
+  await clickDoc(page, 100, 600); await dragDoc(page, 600, 300, 800, 300); await clickDoc(page, 1100, 600);
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('t');
+  await clickDoc(page, 100, 900);
+  await page.keyboard.type('Along the curve');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('v');
+  await page.keyboard.press('Control+a');
+  await page.getByRole('menubar').getByText('Object', { exact: true }).click();
+  await page.getByTestId('menu-object.textOnPath').click();
+  const els = await elements(page);
+  expect(els).toHaveLength(1);
+  const t = els[0] as unknown as { type: string; path: { nodes: unknown[] } | null };
+  expect(t.type).toBe('text');
+  expect(t.path?.nodes.length).toBe(3);
+  await page.getByRole('menubar').getByText('Object', { exact: true }).click();
+  await page.getByTestId('menu-object.releaseTextPath').click();
+  expect((await elements(page))).toHaveLength(2);
+});

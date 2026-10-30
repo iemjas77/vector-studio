@@ -11,6 +11,8 @@ import {
 } from '../../src/core/document';
 import { exportPdf } from '../../src/core/io';
 import { node } from '../../src/core/geometry/path';
+import { createText } from '../../src/core/document';
+import { setupFonts } from './fonts-setup';
 import { rasterizeArtboard } from '../../src/render/export';
 
 const hasPoppler = spawnSync('pdftoppm', ['-v']).status !== null && spawnSync('pdftoppm', ['-v']).error === undefined;
@@ -84,6 +86,13 @@ d('PDF export (verified by rasterising with poppler)', () => {
     const px = (x: number, y: number) => [...pdf.data.slice((pdf.width * y + x) * 4, (pdf.width * y + x) * 4 + 3)];
     expect(px(100, 150)).toEqual([0xcc, 0, 0]);
     expect(px(250, 190)).toEqual([255, 255, 255]);   // outside the mask
+  });
+  it('text is exported as vector outlines that match the canvas renderer', () => {
+    setupFonts();
+    const doc = createDocument('d', 400, 160);
+    addElement(doc, createText(20, 110, 'Vector Studio', { fontSize: 64, fontWeight: 700, fill: solid('#224488') }));
+    const { diff } = compare(doc);
+    expect(diff).toBeLessThan(0.02);
   });
   it('transparent artboards leave the page white-free of background fills; opaque ones paint it', () => {
     const doc = createDocument('d', 50, 50);

@@ -14,15 +14,18 @@ import { ColorPanel } from './panels/Color';
 import { StrokePanel } from './panels/Stroke';
 import { LayersPanel } from './panels/Layers';
 import { AlignPanel } from './panels/Align';
+import { TypographyPanel } from './panels/Typography';
 import { ArtboardsPanel } from './panels/Artboards';
 import { AboutDialog, ExportPngDialog, NewDocumentDialog, ShortcutsDialog } from './dialogs/Dialogs';
 import { useUi } from './store';
 import { platform } from '../platform';
+import { bootFonts } from './fonts-boot';
 
 const PANELS = [
   { id: 'properties', title: 'Properties', el: <PropertiesPanel /> },
   { id: 'color', title: 'Color', el: <ColorPanel /> },
   { id: 'stroke', title: 'Stroke', el: <StrokePanel /> },
+  { id: 'typography', title: 'Typography', el: <TypographyPanel /> },
   { id: 'align', title: 'Align', el: <AlignPanel /> },
   { id: 'layers', title: 'Layers', el: <LayersPanel /> },
   { id: 'artboards', title: 'Artboards', el: <ArtboardsPanel /> },
@@ -31,6 +34,11 @@ const PANELS = [
 export function App() {
   const ws = useMemo(() => new Workspace(), []);
   const api = useMemo<AppApi>(() => ({ ws, get ed() { return ws.current; } }), [ws]);
+
+  useEffect(() => {
+    const ready = bootFonts(() => ws.editors.forEach((e) => e.emit()));
+    (window as unknown as { __vsFontsReady: Promise<void> }).__vsFontsReady = ready;
+  }, [ws]);
 
   useEffect(() => {
     // Read-only inspection hook used by the end-to-end tests.

@@ -1,9 +1,15 @@
 // Electron main process. Kept deliberately small: window, file dialogs, close confirmation.
-const { app, BrowserWindow, Menu, dialog, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, shell, protocol, net } = require('electron');
+const { pathToFileURL } = require('node:url');
+const fonts = require('./fonts.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
 let allowClose = false;
+const DIST = path.join(__dirname, '..', 'dist');
+
+// The renderer is served from app://vs/ (not file://) so fetch() — needed to load the HarfBuzz WebAssembly — works.
+protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -38,7 +44,7 @@ function createWindow() {
 
   const devUrl = process.env.VS_DEV_URL;
   if (devUrl) win.loadURL(devUrl);
-  else win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
+  else win.loadURL('app://vs/index.html');
   return win;
 }
 
@@ -83,7 +89,16 @@ ipcMain.handle('vs:saveMany', async (_e, files) => {
   return saved;
 });
 
+ipcMain.handle('vs:fonts:list', () => fonts.listFonts());
+ipcMain.handle('vs:fonts:read', (_e, key) => fonts.readFont(key));
+
 app.whenReady().then(() => {
+  protocol.handle('app', (req) => {
+    const rel = decodeURIComponent(new URL(req.url).pathname).replace(/^\/+/, '') || 'index.html';
+    const file = path.normalize(path.join(DIST, rel));
+    if (!file.startsWith(DIST + path.sep)) return new Response('Forbidden', { status: 403 }); // no path traversal out of dist/
+    return net.fetch(pathToFileURL(file).toString());
+  });
   Menu.setApplicationMenu(null);
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });

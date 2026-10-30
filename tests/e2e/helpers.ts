@@ -7,7 +7,8 @@ export async function boot(page: Page) {
   await page.setViewportSize({ width: 1500, height: 900 });
   await page.goto('/');
   await page.waitForSelector('[data-testid="canvas"]');
-  await page.waitForFunction(() => !!(window as unknown as VsWindow).__vs);
+  await page.waitForFunction(() => !!(window as unknown as VsWindow).__vs && !!(window as unknown as { __vsFontsReady?: Promise<void> }).__vsFontsReady);
+  await page.evaluate(() => (window as unknown as { __vsFontsReady: Promise<void> }).__vsFontsReady);
 }
 
 /** Reads the active document from the running app (read-only inspection). */

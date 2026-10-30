@@ -39,6 +39,9 @@ export class FontRegistry {
   defaultFamily = 'Inter';
   /** Families tried (in order) for glyphs the requested font lacks. */
   fallbackFamilies: string[] = [];
+  /** Called (debounced) when a layout needed glyphs no loaded font has, so the host can load fallback fonts. */
+  onMissingGlyphs: (() => void) | null = null;
+  private missingTimer: ReturnType<typeof setTimeout> | null = null;
   private sources: FontSource[] = [];
   private catalog: { src: FontSource; info: FontDescriptor & { key: string } }[] = [];
   private loading = new Map<string, Promise<LoadedFace | null>>();
@@ -63,6 +66,11 @@ export class FontRegistry {
     const list = await src.list();
     for (const info of list) this.catalog.push({ src, info });
     this.version++;
+  }
+
+  reportMissing(): void {
+    if (!this.onMissingGlyphs || this.missingTimer) return;
+    this.missingTimer = setTimeout(() => { this.missingTimer = null; this.onMissingGlyphs?.(); }, 50);
   }
 
   /** Family names offered to the user: loaded + discoverable. */

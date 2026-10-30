@@ -8,6 +8,7 @@ const TOOLS: { id: ToolId; label: string; key: string }[] = [
   { id: 'rect', label: 'Rectangle', key: 'M' },
   { id: 'ellipse', label: 'Ellipse', key: 'L' },
   { id: 'pen', label: 'Pen', key: 'P' },
+  { id: 'text', label: 'Type', key: 'T' },
   { id: 'hand', label: 'Hand', key: 'H' },
   { id: 'zoom', label: 'Zoom', key: 'Z' },
 ];
