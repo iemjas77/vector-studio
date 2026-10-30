@@ -76,7 +76,8 @@ export function localBounds(el: ShapeElement): Rect | null {
 export function elementBounds(el: Element, withStroke = false): Rect | null {
   if (el.type === 'group') {
     let r: Rect | null = null;
-    for (const c of el.children) {
+    const kids = el.clip && el.children.length > 1 ? [el.children[el.children.length - 1]] : el.children; // clipped content never extends past the mask
+    for (const c of kids) {
       const cb = elementBounds(c, withStroke);
       if (cb) r = unionRect(r, transformBounds(el.transform, cb));
     }
@@ -133,7 +134,14 @@ export function hitElement(el: Element, p: Vec, tol: number): boolean {
   const lp = apply(inv, p);
   const scale = Math.sqrt(Math.abs(el.transform[0] * el.transform[3] - el.transform[1] * el.transform[2])) || 1;
   const ltol = tol / scale;
-  if (el.type === 'group') return el.children.some((c) => hitElement(c, lp, ltol));
+  if (el.type === 'group') {
+    if (el.clip && el.children.length > 1) {
+      const clipEl = el.children[el.children.length - 1];
+      if (clipEl.type === 'group' || !hitElement({ ...clipEl, fill: { type: 'solid', color: '#000000', alpha: 1 }, stroke: null }, lp, 0)) return false;
+      return el.children.slice(0, -1).some((c) => hitElement(c, lp, ltol));
+    }
+    return el.children.some((c) => hitElement(c, lp, ltol));
+  }
   const subs = elementSubpaths(el).filter((s) => s.nodes.length > 0);
   if (subs.length === 0) return false;
   if (el.fill && el.fill.alpha > 0 && el.type === 'path' && el.extra.length > 0) {

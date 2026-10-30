@@ -33,8 +33,14 @@ function common(el: Element): string {
 function elementSvg(el: Element): string {
   if (!el.visible) return '';
   switch (el.type) {
-    case 'group':
+    case 'group': {
+      if (el.clip && el.children.length > 1) {
+        const clipEl = el.children[el.children.length - 1];
+        const cid = `clip-${el.id}`;
+        return `<clipPath id="${esc(cid)}">${elementSvg({ ...clipEl, visible: true })}</clipPath><g${common(el)} clip-path="url(#${esc(cid)})">${el.children.slice(0, -1).map(elementSvg).join('')}</g>`;
+      }
       return `<g${common(el)}>${el.children.map(elementSvg).join('')}</g>`;
+    }
     case 'rect':
       return `<rect${common(el)} x="${n(el.x)}" y="${n(el.y)}" width="${n(el.w)}" height="${n(el.h)}"${el.rx ? ` rx="${n(el.rx)}"` : ''}${paintAttrs('fill', el.fill)}${strokeAttrs(el.stroke)}/>`;
     case 'ellipse':

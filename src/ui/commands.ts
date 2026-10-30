@@ -168,6 +168,8 @@ export const COMMANDS: Command[] = [
   { id: 'object.exclude', label: 'Exclude Overlap', enabled: (a) => a.ed.selection.length > 1, run: (a) => { a.ed.boolean('exclude'); } },
   { id: 'object.makeCompound', label: 'Make Compound Path', shortcut: 'Ctrl+8', enabled: (a) => a.ed.selection.length > 1, run: (a) => a.ed.makeCompound() },
   { id: 'object.releaseCompound', label: 'Release Compound Path', shortcut: 'Ctrl+Alt+8', enabled: (a) => a.ed.selectedElements.some((e) => e.type === 'path' && e.extra.length > 0), run: (a) => a.ed.releaseCompound() },
+  { id: 'object.makeClip', label: 'Make Clipping Mask', shortcut: 'Ctrl+7', enabled: (a) => a.ed.selection.length > 1, run: (a) => a.ed.makeClip() },
+  { id: 'object.releaseClip', label: 'Release Clipping Mask', shortcut: 'Ctrl+Alt+7', enabled: (a) => a.ed.selectedElements.some((e) => e.type === 'group' && !!e.clip), run: (a) => a.ed.releaseClip() },
   { id: 'object.toPath', label: 'Convert to Path', enabled: (a) => a.ed.selection.some((id) => { const t = getElement(a.ed.doc, id)?.type; return t === 'rect' || t === 'ellipse'; }), run: (a) => a.ed.convertSelectionToPaths() },
   { id: 'object.swap', label: 'Swap Fill and Stroke', shortcut: 'Shift+X', run: (a) => a.ed.swapFillStroke() },
 

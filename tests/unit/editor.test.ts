@@ -475,3 +475,29 @@ describe('boolean and compound commands', () => {
     expect(e.status).toMatch(/empty/);
   });
 });
+
+describe('align / distribute / clipping through the editor', () => {
+  it('align to artboard for a single object and undo', () => {
+    const e = ed(800, 600);
+    const r = createRect(10, 10, 100, 50);
+    e.apply('seed', (d) => addElement(d, r));
+    e.select([r.id]);
+    e.align('hcenter');
+    expect(worldBounds(e.doc, r.id)).toMatchObject({ x: 350 });
+    e.align('bottom');
+    expect(worldBounds(e.doc, r.id)).toMatchObject({ y: 550 });
+    e.undo(); e.undo();
+    expect(worldBounds(e.doc, r.id)).toMatchObject({ x: 10, y: 10 });
+  });
+  it('clipping mask command needs a shape on top and reports otherwise', () => {
+    const e = ed();
+    const a = createRect(0, 0, 50, 50), b = createRect(10, 10, 20, 20), c = createRect(0, 0, 5, 5);
+    e.apply('seed', (d) => { addElement(d, c); addElement(d, a); addElement(d, b); });
+    e.select([a.id, b.id]); e.group();
+    const g = e.selection[0];
+    e.select([c.id, g]); // group is the top-most → invalid mask
+    e.makeClip();
+    expect(e.status).toMatch(/clipping mask needs/);
+    expect(els(e)).toHaveLength(2);
+  });
+});

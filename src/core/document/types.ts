@@ -71,6 +71,8 @@ export interface PathElement extends BaseElement, ShapeStyle {
 export interface GroupElement extends BaseElement {
   type: 'group';
   children: Element[];
+  /** Clipping mask: the top-most child is the clip path; the other children are clipped to it. */
+  clip?: boolean;
 }
 
 export type ShapeElement = RectElement | EllipseElement | PathElement;

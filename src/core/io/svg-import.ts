@@ -73,6 +73,7 @@ const childrenOf = (x: XNode): XNode[] => {
 class Importer {
   warnings = new Set<string>();
   gradients = new Map<string, string>();
+  clips = new Map<string, XNode[]>();
   warn(m: string) { this.warnings.add(m); }
 
   collectDefs(nodes: XNode[]) {
@@ -80,6 +81,10 @@ class Importer {
       const tag = tagOf(x);
       if (!tag) continue;
       const a = attrsOf(x);
+      if (tag === 'clipPath' && a.id) {
+        if (a.clipPathUnits === 'objectBoundingBox') this.warn('clipPath with objectBoundingBox units is not supported; mask ignored');
+        else this.clips.set(a.id, childrenOf(x));
+      }
       if ((tag === 'linearGradient' || tag === 'radialGradient') && a.id) {
         const stop = childrenOf(x).find((c) => tagOf(c) === 'stop');
         if (stop) {
@@ -148,6 +153,16 @@ class Importer {
     const tag = tagOf(x);
     if (!tag || tag === '#text') return [];
     const a = attrsOf(x);
+    const clipRef = /url\(\s*['"]?#([^)'"]+)/.exec(a['clip-path'] ?? '')?.[1];
+    if (clipRef && this.clips.has(clipRef) && tag !== 'clipPath') {
+      const raw = { ...((x[':@'] ?? {}) as Record<string, unknown>) };
+      const wrapperTransform = parseTransform(a.transform);
+      delete raw['@_clip-path']; delete raw['@_transform'];
+      const inner = this.convert({ ...x, ':@': raw }, parent);
+      const clipChild = this.clips.get(clipRef)!.map((c) => this.convert(c, DEFAULT_STYLE)).flat().find((e) => e.type !== 'group');
+      if (inner.length && clipChild) return [createGroup([...inner, clipChild], { name: a['data-name'] ?? 'Clipping group', clip: true, transform: wrapperTransform })];
+      return inner;
+    }
     const st = this.style(parent, a);
     if (st.hidden) return [];
     for (const decl of (a.style ?? '').split(';')) {
@@ -219,7 +234,7 @@ class Importer {
       }
       case 'defs': case 'title': case 'desc': case 'metadata': case 'linearGradient': case 'radialGradient': case 'style': case 'clipPath': case 'mask':
         if (tag === 'style') this.warn('CSS <style> blocks are ignored');
-        if (tag === 'clipPath' || tag === 'mask') this.warn(`<${tag}> is not supported yet and was ignored`);
+        if (tag === 'mask') this.warn('<mask> is not supported yet and was ignored');
         return [];
       default:
         this.warn(`<${tag}> elements are not supported yet and were skipped`);

@@ -4,6 +4,7 @@ export * from './query';
 export * from './shape';
 export * from './ops';
 export * from './boolean';
+export * from './arrange';
 export * from './history';
 export * from './schema';
 export * from './serialize';

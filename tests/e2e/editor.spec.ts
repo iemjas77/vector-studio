@@ -380,3 +380,21 @@ test('Object menu: Unite and Minus Front work on overlapping shapes', async ({ p
   await clickDoc(page, 150, 150);
   expect(await page.evaluate(() => (window as unknown as { __vs: { workspace: { current: { selection: string[] } } } }).__vs.workspace.current.selection.length)).toBe(1);
 });
+
+test('Align panel aligns two shapes; Clipping Mask menu clips and releases', async ({ page }) => {
+  await page.keyboard.press('m');
+  await dragDoc(page, 100, 100, 200, 200);
+  await dragDoc(page, 400, 300, 600, 500);
+  await page.keyboard.press('Control+a');
+  await page.getByTestId('align-left').click();
+  const [a, b] = await elements(page);
+  const left = (e: { x: unknown; transform: unknown }) => (e.x as number) + (e.transform as number[])[4];
+  expect(Math.abs(left(a as never) - left(b as never))).toBeLessThan(0.01);
+  await page.keyboard.press('Control+7');
+  let els = await elements(page);
+  expect(els).toHaveLength(1);
+  expect(els[0]).toMatchObject({ type: 'group', clip: true });
+  await page.keyboard.press('Control+Alt+7');
+  els = await elements(page);
+  expect(els[0]).toMatchObject({ clip: false });
+});

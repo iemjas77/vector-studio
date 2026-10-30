@@ -101,8 +101,24 @@ function drawElement(ctx: CanvasRenderingContext2D, el: Element, opts: RenderOpt
 }
 
 function drawBody(ctx: CanvasRenderingContext2D, el: Element, opts: RenderOptions, m: Matrix6): void {
-  if (el.type === 'group') for (const c of el.children) drawElement(ctx, c, opts, m);
-  else drawShape(ctx, el);
+  if (el.type === 'group') {
+    if (el.clip && el.children.length > 1) {
+      const clipEl = el.children[el.children.length - 1];
+      if (clipEl.type !== 'group' && clipEl.visible) {
+        const saved = ctx.getTransform();
+        const t = clipEl.transform;
+        ctx.transform(t[0], t[1], t[2], t[3], t[4], t[5]);
+        ctx.beginPath();
+        if (clipEl.type === 'rect' && clipEl.rx === 0) ctx.rect(clipEl.x, clipEl.y, clipEl.w, clipEl.h);
+        else for (const sp of elementSubpaths(clipEl)) tracePath(ctx, sp.nodes, true);
+        ctx.setTransform(saved);
+        ctx.clip(clipEl.type === 'path' ? clipEl.fillRule : 'nonzero');
+      } else ctx.clip(new Path2D()); // hidden/invalid mask clips everything
+      for (const c of el.children.slice(0, -1)) drawElement(ctx, c, { ...opts, cull: undefined }, m);
+      return;
+    }
+    for (const c of el.children) drawElement(ctx, c, opts, m);
+  } else drawShape(ctx, el);
 }
 
 type Matrix6 = [number, number, number, number, number, number];

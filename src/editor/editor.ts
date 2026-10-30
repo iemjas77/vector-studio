@@ -3,6 +3,7 @@ import {
   elementsInRect, getElement, groupElements, hitTest, insertCopies, locate, moveLayer, parentMatrix, patchArtboard, patchElements, patchLayer,
   removeArtboard, removeElements, removeLayer, reorder, selectionBounds, setPathNodes, solid, transformWorld, ungroupElements, worldMatrix,
   allElementIds, moveElement, booleanOperation, makeCompoundPath, releaseCompoundPaths, type BooleanOp,
+  alignElements, distributeElements, makeClippingMask, releaseClippingMask, type AlignMode, type DistributeMode,
   type Artboard, type Element, type Paint, type PathElement, type Stroke, type VDocument, type ZOrder,
 } from '../core/document';
 import { apply, applyVector, translate } from '../core/geometry/matrix';
@@ -375,6 +376,32 @@ export class Editor {
     let out: string[] = [];
     this.apply('Release compound path', (d) => { out = releaseCompoundPaths(d, ids); });
     if (out.length) this.select(out);
+  }
+
+  /** Align the selection to itself, or to the active artboard when `toArtboard` (or only one object is selected). */
+  align(mode: AlignMode, toArtboard = false): void {
+    if (!this.selection.length) return;
+    const ids = [...this.selection];
+    const a = this.activeArtboard;
+    const ref = toArtboard || ids.length === 1 ? { x: a.x, y: a.y, w: a.w, h: a.h } : undefined;
+    this.apply('Align', (d) => alignElements(d, ids, mode, ref));
+  }
+  distribute(mode: DistributeMode): void {
+    if (this.selection.length < 3) return;
+    const ids = [...this.selection];
+    this.apply('Distribute', (d) => distributeElements(d, ids, mode));
+  }
+  makeClip(): void {
+    if (this.selection.length < 2) return;
+    const ids = [...this.selection];
+    let res: string | null = null;
+    this.apply('Make clipping mask', (d) => { res = makeClippingMask(d, ids); });
+    if (res) this.select([res]); else this.setStatus('A clipping mask needs two or more objects with a shape on top');
+  }
+  releaseClip(): void {
+    const ids = this.selection.filter((id) => { const e = getElement(this.doc, id); return e?.type === 'group' && e.clip; });
+    if (!ids.length) return;
+    this.apply('Release clipping mask', (d) => ids.forEach((id) => releaseClippingMask(d, id)));
   }
 
   convertSelectionToPaths(): void {
