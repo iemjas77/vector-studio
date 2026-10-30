@@ -18,8 +18,13 @@ import { TypographyPanel } from './panels/Typography';
 import { ArtboardsPanel } from './panels/Artboards';
 import { AboutDialog, ExportPngDialog, NewDocumentDialog, ShortcutsDialog } from './dialogs/Dialogs';
 import { useUi } from './store';
+import { BatchDialog, CleanupDialog, ColorsDialog, TraceDialog } from './dialogs/ToolDialogs';
 import { platform } from '../platform';
 import { bootFonts } from './fonts-boot';
+import { listPlugins, podToolsPlugin, registerPlugin } from '../automation/plugin';
+
+// Built-in plugins are registered once at load so the Plugins menu exists from the first render.
+if (!listPlugins().some((p) => p.id === podToolsPlugin.id)) registerPlugin(podToolsPlugin);
 
 const PANELS = [
   { id: 'properties', title: 'Properties', el: <PropertiesPanel /> },
@@ -143,6 +148,10 @@ function Shell() {
       {dialog === 'export' && <ExportPngDialog />}
       {dialog === 'shortcuts' && <ShortcutsDialog />}
       {dialog === 'about' && <AboutDialog />}
+      {dialog === 'cleanup' && <CleanupDialog />}
+      {dialog === 'colors' && <ColorsDialog />}
+      {dialog === 'trace' && <TraceDialog />}
+      {dialog === 'batch' && <BatchDialog />}
     </div>
   );
 }

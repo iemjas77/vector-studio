@@ -56,6 +56,16 @@ ipcMain.handle('vs:open', async (_e, accept) => {
   return { name: path.basename(p), path: p, text: fs.readFileSync(p, 'utf8') };
 });
 
+ipcMain.handle('vs:openBinary', async (_e, accept) => {
+  const exts = accept.filter((a) => a.startsWith('.')).map((a) => a.slice(1));
+  const res = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Images', extensions: exts }, { name: 'All files', extensions: ['*'] }] });
+  if (res.canceled || res.filePaths.length === 0) return null;
+  const p = res.filePaths[0];
+  const stat = fs.statSync(p);
+  if (stat.size > 100 * 1024 * 1024) throw new Error('File is larger than 100 MB');
+  return { name: path.basename(p), bytes: fs.readFileSync(p) };
+});
+
 ipcMain.handle('vs:save', async (_e, req) => {
   let target = !req.forceDialog && req.path ? req.path : null;
   if (!target) {

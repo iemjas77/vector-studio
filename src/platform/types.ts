@@ -24,6 +24,7 @@ export interface Platform {
   /** System fonts, when the host can provide them. */
   fontSource?: FontSource;
   openTextFile(accept: string[]): Promise<OpenedFile | null>;
+  openBinaryFile(accept: string[]): Promise<{ name: string; bytes: Uint8Array } | null>;
   saveFile(req: SaveRequest): Promise<{ name: string; path?: string } | null>;
   /** Save several files at once (batch export). Electron asks for one folder; browsers download them one after another. Returns the saved names. */
   saveFiles(files: { name: string; data: string | Uint8Array; mime: string }[]): Promise<string[] | null>;

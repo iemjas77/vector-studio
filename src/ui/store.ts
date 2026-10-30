@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 
-export type DialogId = 'new' | 'export' | 'shortcuts' | 'about' | null;
+import type { RasterImage } from '../core/io';
+
+export type DialogId = 'new' | 'export' | 'shortcuts' | 'about' | 'cleanup' | 'colors' | 'trace' | 'batch' | null;
 
 interface UiState {
   dialog: DialogId;
@@ -14,6 +16,9 @@ interface UiState {
   setColorTarget(t: 'fill' | 'stroke'): void;
   collapsed: Record<string, boolean>;
   toggleSection(id: string): void;
+  /** Image picked for tracing (decoded), waiting for the trace dialog. */
+  traceImage: { name: string; image: RasterImage; scaledFrom?: [number, number] } | null;
+  setTraceImage(i: UiState['traceImage']): void;
   spaceDown: boolean;
   setSpace(v: boolean): void;
 }
@@ -31,6 +36,8 @@ export const useUi = create<UiState>((set) => ({
   setColorTarget: (colorTarget) => set({ colorTarget }),
   collapsed: {},
   toggleSection: (id) => set((s) => ({ collapsed: { ...s.collapsed, [id]: !s.collapsed[id] } })),
+  traceImage: null,
+  setTraceImage: (traceImage) => set({ traceImage }),
   spaceDown: false,
   setSpace: (spaceDown) => set({ spaceDown }),
 }));

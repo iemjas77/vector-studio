@@ -29,6 +29,26 @@ export const browserPlatform: Platform = {
       input.click();
     });
   },
+  openBinaryFile(accept) {
+    return new Promise((resolve) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = accept.join(',');
+      input.style.display = 'none';
+      let settled = false;
+      const finish = (v: { name: string; bytes: Uint8Array } | null) => { if (!settled) { settled = true; input.remove(); resolve(v); } };
+      input.addEventListener('change', async () => {
+        const f = input.files?.[0];
+        if (!f) { finish(null); return; }
+        settled = true;
+        input.remove();
+        resolve({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) });
+      });
+      input.addEventListener('cancel', () => { setTimeout(() => finish(null), 600); });
+      document.body.appendChild(input);
+      input.click();
+    });
+  },
   async saveFiles(files) {
     const saved: string[] = [];
     for (const f of files) {

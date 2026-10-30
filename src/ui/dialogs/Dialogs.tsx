@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { rasterSize } from '../../render/export';
 import { ARTBOARD_PRESETS } from '../panels/Artboards';
+import { TEMPLATES } from '../templates';
 import { newDocumentFrom, runExport, SHORTCUT_LIST } from '../commands';
 import { EXPORT_PRESETS, type ExportFormat } from '../export-presets';
 import { checkExport, physicalSize } from '../../core/io';
@@ -30,12 +31,23 @@ export function NewDocumentDialog() {
   const [w, setW] = useState(String(ARTBOARD_PRESETS[0].w));
   const [h, setH] = useState(String(ARTBOARD_PRESETS[0].h));
   const [transparent, setTransparent] = useState(true);
+  const [templateId, setTemplateId] = useState('');
+  const template = TEMPLATES.find((t) => t.id === templateId) ?? null;
   const wn = Math.round(+w), hn = Math.round(+h);
   const valid = wn >= 1 && hn >= 1 && wn <= 16384 && hn <= 16384;
   return (
     <Dialog title="New Document" onClose={close} testId="dialog-new">
       <div className="flex flex-col gap-3">
         <div className="row"><span style={{ width: 70 }}>Name</span><input type="text" data-testid="new-name" style={{ flex: 1 }} value={name} onChange={(e) => setName(e.target.value)} /></div>
+        <div className="row"><span style={{ width: 70 }}>Template</span>
+          <select data-testid="new-template" style={{ flex: 1 }} value={templateId} onChange={(e) => {
+            const t = TEMPLATES.find((x) => x.id === e.target.value);
+            setTemplateId(e.target.value);
+            if (t) { setW(String(t.width)); setH(String(t.height)); setTransparent(t.transparent); setPreset(-1); }
+          }}>
+            <option value="">None – use the size below</option>
+            {TEMPLATES.filter((t) => t.id !== 'blank').map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+          </select></div>
         <div className="row"><span style={{ width: 70 }}>Preset</span>
           <select data-testid="new-preset" style={{ flex: 1 }} value={preset} onChange={(e) => { const i = +e.target.value; setPreset(i); if (i >= 0) { setW(String(ARTBOARD_PRESETS[i].w)); setH(String(ARTBOARD_PRESETS[i].h)); } }}>
             {ARTBOARD_PRESETS.map((p, i) => <option key={p.label} value={i}>{p.label}</option>)}
@@ -46,7 +58,7 @@ export function NewDocumentDialog() {
         {!valid && <div style={{ color: '#ff9a9a' }} data-testid="new-error">Size must be between 1 and 16384 pixels.</div>}
         <div className="row" style={{ justifyContent: 'flex-end' }}>
           <button className="btn" onClick={close}>Cancel</button>
-          <button className="btn btn-primary" data-testid="new-create" disabled={!valid} onClick={() => { newDocumentFrom(app, name.trim() || 'Untitled', wn, hn, transparent ? null : '#ffffff'); close(); }}>Create</button>
+          <button className="btn btn-primary" data-testid="new-create" disabled={!valid} onClick={() => { newDocumentFrom(app, name.trim() || 'Untitled', wn, hn, transparent ? null : '#ffffff', template ? { ppi: template.ppi, guides: template.guides } : {}); close(); }}>Create</button>
         </div>
       </div>
     </Dialog>

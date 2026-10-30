@@ -14,11 +14,14 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:electron": "vite build && node tests/electron/smoke.mjs",
-    "start": "vite build && electron ."
+    "start": "vite build && electron .",
+    "build:cli": "vite build --ssr cli/main.ts --outDir dist-cli --emptyOutDir",
+    "test:cli": "npm run build:cli && node scripts/cli-smoke.mjs"
   },
   "dependencies": {
     "fast-xml-parser": "^5.11.2",
     "harfbuzzjs": "^1.6.4",
+    "imagetracerjs": "^1.2.6",
     "immer": "^11.2.9",
     "paper": "^0.16.0",
     "react": "^19.3.1",

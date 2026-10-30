@@ -1,4 +1,4 @@
-import { createDocument, getElement, insertCopies, parseDocument, serializeDocument, DocumentFormatError, type Artboard, type VDocument } from '../core/document';
+import { createDocument, getElement, newId, insertCopies, parseDocument, serializeDocument, DocumentFormatError, type Artboard, type VDocument } from '../core/document';
 import { exportPdf, exportSvg, importSvg } from '../core/io';
 import { Editor } from '../editor/editor';
 import type { ToolId } from '../editor/types';
@@ -176,6 +176,9 @@ export const COMMANDS: Command[] = [
   { id: 'file.placeSvg', label: 'Place SVG…', run: (a) => importSvgFile(a, true) },
   { id: 'file.exportSvg', label: 'Export Artboard as SVG…', run: (a) => exportSvgFile(a) },
   { id: 'file.exportPng', label: 'Export…', shortcut: 'Ctrl+Shift+E', run: () => useUi.getState().openDialog('export') },
+  { id: 'file.trace', label: 'Trace Image…', run: (a) => traceImageFile(a) },
+  { id: 'file.batch', label: 'Batch Resize & Export…', run: () => useUi.getState().openDialog('batch') },
+  { id: 'file.openTemplate', label: 'New from Template File…', run: (a) => openTemplateFile(a) },
   { id: 'file.close', label: 'Close Tab', shortcut: 'Ctrl+W', run: (a) => closeTab(a, a.ws.active) },
 
   { id: 'edit.undo', label: 'Undo', shortcut: 'Ctrl+Z', enabled: (a) => a.ed.history.canUndo, run: (a) => a.ed.undo() },
@@ -208,6 +211,8 @@ export const COMMANDS: Command[] = [
   { id: 'object.textOnPath', label: 'Make Text on Path', enabled: (a) => a.ed.selectedTexts.length === 1 && a.ed.selectedElements.some((e) => e.type === 'path'), run: (a) => { a.ed.makeTextOnPath(); } },
   { id: 'object.releaseTextPath', label: 'Release Text from Path', enabled: (a) => a.ed.selectedTexts.some((t) => !!t.path), run: (a) => a.ed.releaseTextFromPath() },
   { id: 'object.toPath', label: 'Convert to Path', enabled: (a) => a.ed.selection.some((id) => { const t = getElement(a.ed.doc, id)?.type; return t === 'rect' || t === 'ellipse'; }), run: (a) => a.ed.convertSelectionToPaths() },
+  { id: 'object.cleanup', label: 'Clean Up Vectors…', run: () => useUi.getState().openDialog('cleanup') },
+  { id: 'object.colors', label: 'Reduce / Replace Colors…', run: () => useUi.getState().openDialog('colors') },
   { id: 'object.swap', label: 'Swap Fill and Stroke', shortcut: 'Shift+X', run: (a) => a.ed.swapFillStroke() },
 
   { id: 'view.zoomIn', label: 'Zoom In', shortcut: 'Ctrl+=', run: (a) => a.ed.zoomBy(1.25) },
@@ -246,9 +251,11 @@ export function closeTab(app: App, index: number): void {
   app.ws.close(index);
 }
 
-export function newDocumentFrom(app: App, name: string, w: number, h: number, background: string | null): void {
+export function newDocumentFrom(app: App, name: string, w: number, h: number, background: string | null, extra: { ppi?: number; guides?: { axis: 'v' | 'h'; pos: number }[] } = {}): void {
   const doc = createDocument(name, w, h);
   doc.artboards[0].background = background;
+  if (extra.ppi) doc.ppi = extra.ppi;
+  if (extra.guides?.length) doc.guides = extra.guides.map((g) => ({ id: newId(), ...g }));
   const ed = new Editor(doc);
   app.ws.add(ed);
   ed.fitArtboard();
@@ -283,3 +290,45 @@ export function commandForKey(e: { key: string; ctrlKey: boolean; metaKey: boole
 }
 
 export const SHORTCUT_LIST = COMMANDS.filter((c) => c.shortcut && !/2$/.test(c.id));
+
+/** Decode a raster file into RGBA (flattened on white, scaled down so the longest side is at most `maxSide`). */
+export async function decodeImage(bytes: Uint8Array, maxSide = 1600): Promise<{ image: { width: number; height: number; data: Uint8ClampedArray }; scaledFrom?: [number, number] }> {
+  const bmp = await createImageBitmap(new Blob([bytes as BlobPart]));
+  const s = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+  const w = Math.max(1, Math.round(bmp.width * s)), h = Math.max(1, Math.round(bmp.height * s));
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#ffffff';
+  g.fillRect(0, 0, w, h);
+  g.drawImage(bmp, 0, 0, w, h);
+  const data = g.getImageData(0, 0, w, h);
+  return { image: { width: w, height: h, data: data.data }, scaledFrom: s < 1 ? [bmp.width, bmp.height] : undefined };
+}
+
+export async function traceImageFile(_app: App): Promise<void> {
+  const f = await platform.openBinaryFile(['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp']);
+  if (!f) return;
+  try {
+    const d = await decodeImage(f.bytes);
+    useUi.getState().setTraceImage({ name: f.name, image: d.image, scaledFrom: d.scaledFrom });
+    useUi.getState().openDialog('trace');
+  } catch (e) {
+    notify(`Cannot read ${f.name} as an image: ${(e as Error).message}`, 'error');
+  }
+}
+
+/** Opens a .vstudio file as a NEW untitled document, so saving never overwrites the template. */
+export async function openTemplateFile(app: App): Promise<void> {
+  const f = await platform.openTextFile(['.vstudio', '.json']);
+  if (!f) return;
+  try {
+    const doc = parseDocument(f.text);
+    doc.name = `${baseName(f.name)} copy`;
+    const ed = new Editor(doc);
+    app.ws.add(ed);
+    ed.fitArtboard();
+  } catch (e) {
+    notify(`Cannot open ${f.name}: ${(e as Error).message}`, 'error');
+  }
+}

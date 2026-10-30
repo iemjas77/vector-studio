@@ -581,3 +581,97 @@ test('Make Text on Path from the Object menu', async ({ page }) => {
   await page.getByTestId('menu-object.releaseTextPath').click();
   expect((await elements(page))).toHaveLength(2);
 });
+
+test('POD template creates a 300 ppi transparent document with centre and safe-area guides', async ({ page }) => {
+  await page.keyboard.press('Control+n');
+  await page.getByTestId('new-template').selectOption('pod-tee');
+  await page.getByTestId('new-create').click();
+  const d = await docOf(page);
+  expect(d.ppi).toBe(300);
+  expect(d.artboards[0]).toMatchObject({ w: 4500, h: 5400, background: null });
+  expect(d.guides.length).toBe(6);
+  expect(d.guides.some((g: { axis: string; pos: number }) => g.axis === 'v' && g.pos === 2250)).toBe(true);
+  // physical size shows in the export dialog
+  await page.keyboard.press('Control+Shift+e');
+  await page.getByTestId('export-preset').selectOption('pod-tee');
+  await expect(page.getByTestId('export-size')).toContainText('15.00 × 18.00 in');
+});
+
+test('Clean Up and Reduce Colors dialogs change the document and are undoable', async ({ page }) => {
+  await page.keyboard.press('m');
+  await dragDoc(page, 100, 100, 300, 300);
+  await page.getByTestId('color-hex').fill('#ff0000'); await page.getByTestId('color-hex').press('Enter');
+  await dragDoc(page, 400, 100, 600, 300);
+  await page.getByTestId('color-hex').fill('#f40a0a'); await page.getByTestId('color-hex').press('Enter');
+  await dragDoc(page, 700, 100, 900, 300);
+  await page.getByTestId('color-hex').fill('#0000ff'); await page.getByTestId('color-hex').press('Enter');
+  const [, second] = await elements(page);
+  await page.getByTestId(`el-vis-${second.id}`).click();       // hide the middle one
+  await page.getByRole('menubar').getByText('Object', { exact: true }).click();
+  await page.getByTestId('menu-object.cleanup').click();
+  await page.getByTestId('cleanup-run').click();
+  await expect(page.getByTestId('cleanup-report')).toContainText('Removed 1 object');
+  await page.keyboard.press('Escape');
+  expect(await elements(page)).toHaveLength(2);
+  await page.getByRole('menubar').getByText('Object', { exact: true }).click();
+  await page.getByTestId('menu-object.colors').click();
+  await page.getByTestId('colors-target').fill('1');
+  await page.getByTestId('colors-reduce').click();
+  await expect(page.getByTestId('colors-msg')).toContainText('→ 1 colours');
+  await page.keyboard.press('Escape');
+  const fills = (await elements(page)).map((e) => (e as unknown as { fill: { color: string } }).fill.color);
+  expect(new Set(fills).size).toBe(1);
+  await page.keyboard.press('Control+z');
+  const back = (await elements(page)).map((e) => (e as unknown as { fill: { color: string } }).fill.color);
+  expect(new Set(back).size).toBe(2);
+});
+
+test('Trace Image: a PNG becomes editable vector shapes on the artboard', async ({ page }, info) => {
+  const fs = await import('node:fs');
+  const png = new PNG({ width: 80, height: 80 });
+  for (let y = 0; y < 80; y++) for (let x = 0; x < 80; x++) {
+    const i = (80 * y + x) * 4;
+    const inCircle = (x - 40) ** 2 + (y - 40) ** 2 < 28 ** 2;
+    png.data[i] = inCircle ? 220 : 255; png.data[i + 1] = inCircle ? 30 : 255; png.data[i + 2] = inCircle ? 30 : 255; png.data[i + 3] = 255;
+  }
+  const file = info.outputPath('circle.png');
+  fs.writeFileSync(file, PNG.sync.write(png));
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('menubar').getByText('File', { exact: true }).click();
+  await page.getByTestId('menu-file.trace').click();
+  await (await chooser).setFiles(file);
+  await expect(page.getByTestId('dialog-trace')).toBeVisible();
+  await expect(page.getByTestId('trace-info')).toContainText('80×80');
+  await page.getByTestId('trace-go').click();
+  await expect(page.getByTestId('dialog-trace')).toHaveCount(0);
+  const els = await elements(page);
+  expect(els).toHaveLength(1);
+  expect(els[0].type).toBe('group');
+  const kids = (els[0] as unknown as { children: { type: string; fill: { color: string } }[] }).children;
+  expect(kids.length).toBeGreaterThanOrEqual(1);
+  expect(kids.some((k) => k.type === 'path' && parseInt(k.fill.color.slice(1, 3), 16) > 180 && parseInt(k.fill.color.slice(3, 5), 16) < 100)).toBe(true);
+});
+
+test('Batch Resize & Export writes one correctly sized file per size; Plugins menu adds guides', async ({ page }, info) => {
+  const fs = await import('node:fs');
+  await page.keyboard.press('Control+n'); await page.getByTestId('new-w').fill('1000'); await page.getByTestId('new-h').fill('1000'); await page.getByTestId('new-create').click();
+  await page.keyboard.press('m'); await page.getByTestId('swatch-ff0000').click(); await dragDoc(page, 250, 250, 750, 750);
+  await page.getByRole('menubar').getByText('Plugins', { exact: true }).click();
+  await page.getByTestId('menu-plugin-vs.pod-tools-addPrintGuides').click();
+  expect(((await docOf(page)).guides as unknown[]).length).toBe(5);
+  await page.getByRole('menubar').getByText('File', { exact: true }).click();
+  await page.getByTestId('menu-file.batch').click();
+  await page.getByTestId('batch-sizes').fill('500x500 small\n200x400 tall\nnonsense');
+  await expect(page.getByTestId('batch-error')).toContainText('Cannot read size');
+  await expect(page.getByTestId('batch-go')).toBeDisabled();
+  await page.getByTestId('batch-sizes').fill('500x500 small\n200x400 tall');
+  const names: string[] = [];
+  const saved: string[] = [];
+  page.on('download', async (d) => { names.push(d.suggestedFilename()); const p = info.outputPath(d.suggestedFilename()); await d.saveAs(p); saved.push(p); });
+  await page.getByTestId('batch-go').click();
+  await expect.poll(() => saved.length, { timeout: 20000 }).toBe(2);
+  expect(names.some((n) => /small\.png$/.test(n))).toBe(true);
+  expect(names.some((n) => /tall\.png$/.test(n))).toBe(true);
+  const dims = saved.map((p) => { const png = PNG.sync.read(fs.readFileSync(p)); return [png.width, png.height]; }).sort();
+  expect(dims).toEqual([[200, 400], [500, 500]]);
+});

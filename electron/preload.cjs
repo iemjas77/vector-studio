@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('vsElectron', {
   openTextFile: (accept) => ipcRenderer.invoke('vs:open', accept),
+  openBinaryFile: (accept) => ipcRenderer.invoke('vs:openBinary', accept),
   saveFile: (req) => ipcRenderer.invoke('vs:save', req),
   listFonts: () => ipcRenderer.invoke('vs:fonts:list'),
   readFont: (key) => ipcRenderer.invoke('vs:fonts:read', key),
