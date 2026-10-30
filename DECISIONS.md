@@ -1,0 +1,27 @@
+# Architecture decision records
+
+## ADR-001: Electron + React + TypeScript, DOM-free core
+*Accepted.* Windows is the first target; a web stack gives fast iteration, headless testing in the cloud (Chromium + Node), and a path to Windows via Electron. The document engine, geometry and editor controller have no DOM dependency so they test in Node and can later be reused by batch/CLI automation.
+*Consequence:* larger install than a native app; Chromium security updates must be tracked.
+
+## ADR-002: Canvas2D as the single renderer for now
+*Accepted (revisit at Phase 4/5).* Needed: AA, clipping, alpha, dash, group opacity. Canvas2D provides all of that, runs identically in the browser, Electron and Node (`@napi-rs/canvas`), and is pixel-testable. Measured: 10k mixed objects ≈ 130–160 ms overview, ≈ 8 ms zoomed in with culling. CanvasKit would add a second code path and ~7 MB WASM without a demonstrated need yet.
+*Revisit when:* blend modes, live blur/effects, large-doc frame rate or CMYK soft-proofing demand it.
+
+## ADR-003: Immutable documents with snapshot history
+*Accepted.* immer gives structural sharing, so each undo step is a pointer; no hand-written inverse commands to get wrong. Property-style test: 200 random edits then full undo returns the *identical* initial object. Gestures use a transaction with `restoreBase` so drags are computed from the start state (no drift) and are one undo step.
+
+## ADR-004: Handles relative to anchors; live rect/ellipse
+*Accepted.* Relative handles make node moves trivially correct and keep serialization compact. Rect/ellipse stay parametric until a node edit converts them (same id/appearance), like Illustrator "live shapes".
+
+## ADR-005: Strokes are not scaled separately from transforms
+*Accepted for Phase 1, known limitation.* Scale handles apply an affine transform to the element, so stroke width scales with it (as in SVG). A later "scale strokes" option will bake scale into geometry.
+
+## ADR-006: One command registry
+*Accepted.* Menus, shortcuts and the help dialog are generated from `commands.ts`, which prevents dead menu items and duplicate/contradictory shortcuts.
+
+## ADR-007: Native file format = versioned JSON validated with zod
+*Accepted.* Human-readable, diffable, easy to migrate (`version`), strict on load. Future large assets (images, fonts) will move to a zip container; the JSON document stays the manifest.
+
+## ADR-008: Compound paths deferred; SVG import splits them
+*Accepted (temporary).* The path model is single-subpath in Phase 1. Imported multi-subpath paths are split into a group and the user is warned (holes become filled). Compound paths are Phase 2 priority #1.

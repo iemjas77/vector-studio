@@ -13,7 +13,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "electron": "vite build && electron ."
+    "test:electron": "vite build && node tests/electron/smoke.mjs",
+    "start": "vite build && electron ."
   },
   "dependencies": {
     "fast-xml-parser": "^5.11.2",
@@ -33,6 +34,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "electron": "^45.1.0",
     "eslint": "^10.14.0",
     "globals": "^17.13.0",
     "pngjs": "^7.0.0",

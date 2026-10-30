@@ -342,3 +342,22 @@ test('help dialogs open from shortcut and menu and close with Escape', async ({ 
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('dialog-shortcuts')).toHaveCount(0);
 });
+
+test('print-on-demand template: 4500x5400 transparent PNG exports from the real browser with exact size and alpha', async ({ page }, info) => {
+  test.setTimeout(90000);
+  await page.keyboard.press('Control+n');
+  await page.getByTestId('new-create').click(); // default preset is the T-shirt template, transparent
+  await page.keyboard.press('m'); await page.getByTestId('swatch-0070ff').click();
+  await dragDoc(page, 1000, 1200, 3000, 3200);
+  await page.keyboard.press('Control+Shift+e');
+  await expect(page.getByTestId('export-size')).toContainText('4500 × 5400');
+  const [download] = await Promise.all([page.waitForEvent('download', { timeout: 60000 }), page.getByTestId('export-go').click()]);
+  const out = info.outputPath('pod.png');
+  await download.saveAs(out);
+  const png = PNG.sync.read(readFileSync(out));
+  expect(png.width).toBe(4500); expect(png.height).toBe(5400);
+  const px = (x: number, y: number) => [...png.data.slice((png.width * y + x) * 4, (png.width * y + x) * 4 + 4)];
+  expect(px(100, 100)[3]).toBe(0);
+  expect(px(2000, 2200)).toEqual([0, 112, 255, 255]);
+  expect(px(4400, 5300)[3]).toBe(0);
+});
