@@ -519,6 +519,24 @@ export class Editor {
     return out.length;
   }
 
+  /** Select every top-level object of the given types (e.g. ['text']) on unlocked, visible layers. */
+  selectByType(types: string[]): void {
+    const ids: string[] = [];
+    for (const l of this.doc.layers) if (l.visible && !l.locked) for (const e of l.children) if (e.visible && !e.locked && types.includes(e.type)) ids.push(e.id);
+    this.select(ids);
+  }
+  /** Uniform scale of the selection about its own centre. */
+  scaleSelection(percent: number): void {
+    const b = this.selectionBounds();
+    if (!b || !(percent > 0)) return;
+    const s = percent / 100, cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+    this.transformSelection([s, 0, 0, s, cx - cx * s, cy - cy * s], 'Scale');
+  }
+  /** Rename all layers with a pattern: {n} = number (bottom layer is 1), {name} = old name. */
+  renameLayers(pattern: string): void {
+    this.apply('Rename layers', (d) => d.layers.forEach((l, i) => { l.name = pattern.replace(/\{n\}/g, String(i + 1)).replace(/\{name\}/g, l.name); }));
+  }
+
   convertSelectionToPaths(): void {
     const ids = this.selection.filter((id) => { const t = getElement(this.doc, id)?.type; return t === 'rect' || t === 'ellipse' || t === 'text'; });
     if (!ids.length) return;

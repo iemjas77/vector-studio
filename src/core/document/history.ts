@@ -24,6 +24,7 @@ export class History<T> {
   get doc(): T { return this._doc; }
   get canUndo(): boolean { return this.undoStack.length > 0; }
   get canRedo(): boolean { return this.redoStack.length > 0; }
+  get undoDepth(): number { return this.undoStack.length; }
   get undoLabel(): string | null { return this.undoStack.at(-1)?.label ?? null; }
   get redoLabel(): string | null { return this.redoStack.at(-1)?.label ?? null; }
   get inTransaction(): boolean { return this.base !== null; }
