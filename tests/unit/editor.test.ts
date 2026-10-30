@@ -10,6 +10,7 @@ function ed(w = 800, h = 600): Editor {
   const e = new Editor(createDocument('t', w, h));
   e.viewport.setSize(800, 600);
   e.viewport.zoom = 1; e.viewport.panX = 0; e.viewport.panY = 0;
+  e.snapEnabled = false;   // snapping has its own tests; exact-geometry tests must not be nudged by neighbours
   return e;
 }
 const drag = (e: Editor, x1: number, y1: number, x2: number, y2: number, m = {}, downMods: object = m) => {
@@ -519,6 +520,7 @@ describe('guides and snapping', () => {
   });
   it('snaps drawing to guides, artboard edges and object edges; ctrl bypasses; toggle disables', () => {
     const e = ed(800, 600);
+    e.snapEnabled = true;
     e.apply('guide', (d) => { d.guides = [{ id: 'g1', axis: 'v', pos: 300 }]; });
     e.setTool('rect');
     drag(e, 100, 100, 297, 200);               // right edge 3px from guide → snaps
@@ -591,5 +593,140 @@ describe('isolation mode', () => {
     e.enterIsolation(g);
     e.select([g]); e.deleteSelection();
     expect(e.isolation).toBeNull();
+  });
+});
+
+describe('additional drawing and picking tools', () => {
+  const paths = (e: Editor) => els(e).filter((x) => x.type === 'path') as Extract<ReturnType<typeof els>[number], { type: 'path' }>[];
+  it('polygon: drag from the centre sets radius and rotation; sides come from the tool options; undoable', () => {
+    const e = ed();
+    e.setTool('polygon');
+    e.toolOptions.sides = 6;
+    drag(e, 300, 300, 400, 300);
+    const p = paths(e)[0];
+    expect(p).toMatchObject({ closed: true, name: 'Polygon' });
+    expect(p.nodes).toHaveLength(6);
+    p.nodes.forEach((n) => expect(Math.hypot(n.x - 300, n.y - 300)).toBeCloseTo(100, 3));
+    expect(p.nodes[0].x).toBeCloseTo(400); expect(p.nodes[0].y).toBeCloseTo(300);   // first vertex follows the drag direction
+    e.undo(); expect(els(e)).toHaveLength(0);
+  });
+  it('star, rounded rectangle, arc, spiral and line create the right geometry', () => {
+    const e = ed();
+    e.setTool('star'); e.toolOptions.starPoints = 7; e.toolOptions.starRatio = 0.4;
+    drag(e, 200, 200, 200, 100);
+    expect(paths(e)[0].nodes).toHaveLength(14);
+    e.setTool('rrect'); e.toolOptions.cornerRadius = 20;
+    drag(e, 400, 100, 600, 200);
+    expect(els(e)[1]).toMatchObject({ type: 'rect', rx: 20, x: 400, y: 100, w: 200, h: 100 });
+    drag(e, 400, 300, 410, 310);                       // radius is clamped to half the smaller side
+    expect(els(e)[2]).toMatchObject({ type: 'rect', rx: 5 });
+    e.setTool('arc'); e.toolOptions.arcSweep = 180;
+    drag(e, 100, 400, 300, 500);
+    const arc = paths(e)[1];
+    expect(arc.closed).toBe(false);
+    expect(arc.fill).toBeNull();
+    expect(arc.nodes[arc.nodes.length - 1].x).toBeCloseTo(100, 3);   // half circle ends at the left of the ellipse
+    e.setTool('spiral'); e.toolOptions.spiralTurns = 2;
+    drag(e, 600, 450, 700, 450);
+    expect(paths(e)[2].nodes.length).toBeGreaterThan(8);
+    e.setTool('line');
+    drag(e, 100, 550, 190, 560, { shift: true });       // shift snaps to 45° steps → horizontal
+    const line = paths(e)[3];
+    expect(line.nodes).toHaveLength(2);
+    expect(line.nodes[1].y).toBeCloseTo(550, 3);
+    expect(line.stroke).not.toBeNull();
+    e.setTool('line'); click(e, 10, 10);
+    expect(paths(e)).toHaveLength(4);                  // a click draws nothing
+  });
+  it('pencil smooths a freehand stroke into a few curve segments', () => {
+    const e = ed();
+    e.setTool('pencil');
+    e.pointerDown(100, 300);
+    for (let i = 1; i <= 60; i++) { const t = i / 60 * Math.PI; e.pointerMove(100 + 200 * (i / 60), 300 - 100 * Math.sin(t)); }
+    e.pointerUp(300, 300);
+    const p = paths(e)[0];
+    expect(p.closed).toBe(false);
+    expect(p.nodes.length).toBeLessThanOrEqual(6);
+    expect(p.nodes.some((n) => n.outX !== 0 || n.outY !== 0)).toBe(true);
+    expect(e.history.undoLabel).toBe('Draw with pencil');
+    e.setTool('pencil'); click(e, 50, 50);
+    expect(paths(e)).toHaveLength(1);
+  });
+  it('eyedropper copies appearance onto the selection; with no selection it sets the default style', () => {
+    const e = ed();
+    const a = createRect(100, 100, 100, 100, { fill: solid('#ff0000'), stroke: defaultStroke('#00ff00', 5), opacity: 0.5 }), b = createRect(300, 100, 100, 100, { fill: solid('#0000ff') });
+    e.apply('seed', (d) => { addElement(d, a); addElement(d, b); });
+    e.select([b.id]);
+    e.setTool('eyedropper');
+    click(e, 150, 150);
+    expect(getElement(e.doc, b.id)).toMatchObject({ fill: { color: '#ff0000' }, stroke: { width: 5 }, opacity: 0.5 });
+    e.clearSelection();
+    click(e, 350, 150);
+    expect(e.style.fill).toMatchObject({ color: '#ff0000' });
+  });
+  it('magic wand selects all objects with the same fill; shift adds; alt matches strokes; click on nothing clears', () => {
+    const e = ed();
+    const mk = (x: number, c: string, s = '#000000') => createRect(x, 100, 50, 50, { fill: solid(c), stroke: defaultStroke(s, 2) });
+    const a = mk(0, '#ff0000'), b = mk(100, '#ff0000'), c = mk(200, '#00ff00', '#ff00ff'), d2 = mk(300, '#0000ff', '#ff00ff');
+    e.apply('seed', (d) => { [a, b, c, d2].forEach((x) => addElement(d, x)); });
+    e.setTool('wand');
+    click(e, 25, 125);
+    expect(new Set(e.selection)).toEqual(new Set([a.id, b.id]));
+    click(e, 225, 125, { shift: true });
+    expect(new Set(e.selection)).toEqual(new Set([a.id, b.id, c.id]));
+    click(e, 225, 125);
+    e.pointerDown(225, 125, { alt: true }); e.pointerUp(225, 125, { alt: true });
+    expect(new Set(e.selection)).toEqual(new Set([c.id, d2.id]));
+    click(e, 700, 500);
+    expect(e.selection).toEqual([]);
+  });
+  it('lasso selects objects whose anchor or centre falls inside the loop', () => {
+    const e = ed();
+    const a = createRect(100, 100, 50, 50), b = createRect(400, 100, 50, 50), c = createRect(100, 400, 50, 50);
+    e.apply('seed', (d) => { [a, b, c].forEach((x) => addElement(d, x)); });
+    e.setTool('lasso');
+    e.pointerDown(80, 80);
+    [[300, 80], [300, 300], [80, 300]].forEach(([x, y]) => e.pointerMove(x, y));
+    expect(e.lasso && e.lasso.length).toBeGreaterThan(2);
+    e.pointerUp(80, 300);
+    expect(e.selection).toEqual([a.id]);
+    expect(e.lasso).toBeNull();
+  });
+  it('gradient tool: drag across the selection sets a linear gradient in bounding-box units; one undo step', () => {
+    const e = ed();
+    const r = createRect(100, 100, 200, 100, { fill: solid('#ff0000') });
+    e.apply('seed', (d) => addElement(d, r));
+    e.select([r.id]);
+    e.setTool('gradient');
+    drag(e, 100, 150, 300, 150);
+    const f = (getElement(e.doc, r.id) as { fill: { type: string; x1: number; y1: number; x2: number; y2: number; stops: { color: string }[] } }).fill;
+    expect(f).toMatchObject({ type: 'linear', x1: 0, y1: 0.5, x2: 1, y2: 0.5 });
+    expect(f.stops[0].color).toBe('#ff0000');
+    drag(e, 150, 100, 150, 200);
+    expect((getElement(e.doc, r.id) as { fill: { x1: number; x2: number; y2: number } }).fill).toMatchObject({ x1: 0.25, x2: 0.25, y2: 1 });
+    e.undo(); e.undo();
+    expect(getElement(e.doc, r.id)).toMatchObject({ fill: { type: 'solid' } });
+    e.clearSelection(); drag(e, 0, 0, 50, 50);                 // nothing selected: tells the user instead of failing silently
+    expect(e.status).toMatch(/Select an object first/);
+  });
+  it('artboard tool: drag to create, click to activate, drag to move with its artwork', () => {
+    const e = ed(800, 600);
+    const r = createRect(100, 100, 100, 100);
+    e.apply('seed', (d) => addElement(d, r));
+    e.setTool('artboard');
+    drag(e, 1000, 100, 1300, 400);
+    expect(e.doc.artboards).toHaveLength(2);
+    expect(e.doc.artboards[1]).toMatchObject({ x: 1000, y: 100, w: 300, h: 300 });
+    expect(e.activeArtboardId).toBe(e.doc.artboards[1].id);
+    click(e, 50, 50);
+    expect(e.activeArtboardId).toBe(e.doc.artboards[0].id);
+    drag(e, 50, 50, 70, 80);                                  // move the first artboard by (20,30)
+    expect(e.doc.artboards[0]).toMatchObject({ x: 20, y: 30 });
+    expect(worldBounds(e.doc, r.id)).toMatchObject({ x: 120, y: 130 });
+    e.undo();
+    expect(e.doc.artboards[0]).toMatchObject({ x: 0, y: 0 });
+    expect(worldBounds(e.doc, r.id)).toMatchObject({ x: 100, y: 100 });
+    drag(e, 2000, 2000, 2003, 2003);                          // tiny drag creates nothing
+    expect(e.doc.artboards).toHaveLength(2);
   });
 });

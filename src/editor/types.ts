@@ -1,7 +1,9 @@
 import type { PathNode, Rect, Vec } from '../core/geometry/types';
 import type { Editor } from './editor';
 
-export type ToolId = 'select' | 'direct' | 'rect' | 'ellipse' | 'pen' | 'text' | 'hand' | 'zoom';
+export type ToolId =
+  | 'select' | 'direct' | 'wand' | 'lasso' | 'pen' | 'pencil' | 'text' | 'rect' | 'rrect' | 'ellipse' | 'polygon' | 'star' | 'line' | 'arc' | 'spiral'
+  | 'eyedropper' | 'gradient' | 'artboard' | 'hand' | 'zoom';
 
 export interface PointerInfo {
   /** Document-space position. */
@@ -48,6 +50,8 @@ export interface OverlayModel {
   marquee: Rect | null;
   /** Pen tool in-progress path (world space) and the rubber-band target. */
   pen: { nodes: PathNode[]; closed: boolean; cursor: Vec | null } | null;
+  /** Lasso polygon being drawn. */
+  lasso: Vec[] | null;
   /** Live shape-creation preview. */
   rubber: Rect | null;
 }

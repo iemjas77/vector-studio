@@ -82,6 +82,24 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, m: OverlayModel, vp: 
     });
   }
 
+  if (m.lasso && m.lasso.length > 1) {
+    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = BLUE;
+    ctx.beginPath();
+    m.lasso.forEach((p, i) => { const s = S(p.x, p.y); if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y); });
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(77,156,255,0.08)';
+    ctx.fill();
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  if (m.rubber && m.rubber.w > 0 && m.rubber.h > 0) {
+    const tl = S(m.rubber.x, m.rubber.y), br = S(m.rubber.x + m.rubber.w, m.rubber.y + m.rubber.h);
+    ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = BLUE;
+    ctx.strokeRect(tl.x + 0.5, tl.y + 0.5, br.x - tl.x, br.y - tl.y);
+    ctx.setLineDash([]);
+  }
   if (m.marquee) {
     const tl = S(m.marquee.x, m.marquee.y), br = S(m.marquee.x + m.marquee.w, m.marquee.y + m.marquee.h);
     ctx.setLineDash([4, 3]);

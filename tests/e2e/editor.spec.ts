@@ -10,7 +10,10 @@ const elements = async (page: import('@playwright/test').Page) => (await docOf(p
 test('app shell shows every required region', async ({ page }) => {
   for (const id of ['menubar', 'doc-tabs', 'toolbar', 'canvas', 'statusbar', 'panels', 'optionsbar']) await expect(page.getByTestId(id)).toBeVisible();
   for (const p of ['properties', 'color', 'stroke', 'layers', 'artboards']) await expect(page.getByTestId(`panel-${p}`)).toBeVisible();
-  for (const t of ['select', 'direct', 'rect', 'ellipse', 'pen', 'hand', 'zoom']) await expect(page.getByTestId(`tool-${t}`)).toBeVisible();
+  for (const t of ['select', 'pen', 'text', 'rect', 'eyedropper', 'artboard']) await expect(page.getByTestId(`tool-${t}`)).toBeVisible();   // one button per tool group
+  await page.getByTestId('flyout-select').click();
+  for (const t of ['select', 'direct', 'wand', 'lasso']) await expect(page.getByTestId('flyout-menu-select').getByTestId(`tool-${t}`)).toBeVisible();
+  await page.getByTestId('flyout-menu-select').getByTestId('tool-select').click();
 });
 
 test('artboard renders at its exact size on the canvas', async ({ page }) => {
@@ -858,4 +861,45 @@ test('Batch dialog: runs an action over several files, reports the broken one, s
   await expect.poll(() => names.length, { timeout: 15000 }).toBe(2);
   expect(names.sort()).toEqual(['1-alpha.png', '3-beta.png']);
   expect([a, b].map((f) => fs.readFileSync(f, 'utf8'))).toEqual(before);
+});
+
+test('toolbar flyouts: pick Star, set points in the options bar, draw; shortcuts for Pencil, Eyedropper, Wand; compact/expanded toggle', async ({ page }) => {
+  await page.getByTestId('flyout-shape').click();
+  await page.getByTestId('tool-star').click();
+  await expect(page.getByTestId('status-tool')).toHaveText('Star');
+  await page.getByTestId('opt-points').fill('8'); await page.getByTestId('opt-points').press('Enter');
+  await dragDoc(page, 400, 400, 400, 250);
+  const star = (await elements(page))[0] as unknown as { type: string; nodes: unknown[]; name: string };
+  expect(star).toMatchObject({ type: 'path', name: 'Star' });
+  expect(star.nodes).toHaveLength(16);
+  // the group button now shows the last-used shape tool
+  await expect(page.getByTestId('tool-star')).toBeVisible();
+  await page.keyboard.press('n');
+  await expect(page.getByTestId('status-tool')).toHaveText('Pencil');
+  await page.keyboard.press('i'); await expect(page.getByTestId('status-tool')).toHaveText('Eyedropper');
+  await page.keyboard.press('y'); await expect(page.getByTestId('status-tool')).toHaveText('Magic Wand');
+  await page.keyboard.press('Shift+o'); await expect(page.getByTestId('status-tool')).toHaveText('Artboard');
+  await page.getByTestId('toolbar-toggle').click();
+  expect((await page.getByTestId('toolbar').boundingBox())!.width).toBeGreaterThan(60);
+});
+
+test('pencil, magic wand and artboard tools work with real mouse input', async ({ page }) => {
+  await page.keyboard.press('n');
+  const a = await docToPage(page, 200, 300), b = await docToPage(page, 600, 300);
+  await page.mouse.move(a.x, a.y); await page.mouse.down();
+  for (let i = 1; i <= 40; i++) await page.mouse.move(a.x + ((b.x - a.x) * i) / 40, a.y - 60 * Math.sin((i / 40) * Math.PI));
+  await page.mouse.up();
+  const els = await elements(page);
+  expect(els).toHaveLength(1);
+  expect((els[0] as unknown as { nodes: unknown[] }).nodes.length).toBeLessThanOrEqual(5);
+  await page.keyboard.press('Escape');                        // deselect the pencil path so the swatch only sets the default fill
+  await page.keyboard.press('m'); await page.getByTestId('swatch-ff0000').click();
+  await dragDoc(page, 100, 600, 250, 750); await dragDoc(page, 400, 600, 550, 750);
+  await page.keyboard.press('y');
+  await clickDoc(page, 150, 650);
+  expect(await page.evaluate(() => (window as unknown as { __vs: { workspace: { current: { selection: string[] } } } }).__vs.workspace.current.selection.length)).toBe(2);
+  await page.getByTestId('zoom-input').fill('25'); await page.getByTestId('zoom-input').press('Enter');   // room to the right of the artboard
+  await page.keyboard.press('Shift+o');
+  await dragDoc(page, 2200, 100, 2600, 500);
+  expect((await docOf(page)).artboards).toHaveLength(2);
 });

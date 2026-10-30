@@ -238,6 +238,18 @@ export const COMMANDS: Command[] = [
   tool('ellipse', 'Ellipse Tool', 'L'),
   tool('pen', 'Pen Tool', 'P'),
   tool('text', 'Type Tool', 'T'),
+  tool('wand', 'Magic Wand Tool', 'Y'),
+  tool('lasso', 'Lasso Tool', 'Q'),
+  tool('pencil', 'Pencil Tool', 'N'),
+  tool('eyedropper', 'Eyedropper Tool', 'I'),
+  tool('gradient', 'Gradient Tool', 'G'),
+  tool('artboard', 'Artboard Tool', 'Shift+O'),
+  tool('line', 'Line Segment Tool', '\\'),
+  tool('rrect', 'Rounded Rectangle Tool', ''),
+  tool('polygon', 'Polygon Tool', ''),
+  tool('star', 'Star Tool', ''),
+  tool('arc', 'Arc Tool', ''),
+  tool('spiral', 'Spiral Tool', ''),
   tool('hand', 'Hand Tool', 'H'),
   tool('zoom', 'Zoom Tool', 'Z'),
 
@@ -279,7 +291,7 @@ export function parseShortcut(s: string): ParsedShortcut {
   return { key: key.toLowerCase(), ctrl: mods.includes('Ctrl'), shift: mods.includes('Shift'), alt: mods.includes('Alt') };
 }
 
-const PARSED = COMMANDS.filter((c) => c.shortcut).map((c) => ({ c, s: parseShortcut(c.shortcut!) }));
+const PARSED = COMMANDS.filter((c) => !!c.shortcut).map((c) => ({ c, s: parseShortcut(c.shortcut!) }));
 
 /** Finds the command for a key event. Tool letters only fire when no modifier is held. */
 export function commandForKey(e: { key: string; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean; code?: string }): Command | null {

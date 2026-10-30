@@ -2,16 +2,18 @@ import {
   History, addElement, addArtboard, addLayer, convertToPath, createDocument, defaultStroke, duplicateElements, elementBounds, elementNodes,
   elementsInRect, getElement, groupElements, hitTest, insertCopies, locate, moveLayer, parentMatrix, patchArtboard, patchElements, patchLayer,
   removeArtboard, removeElements, removeLayer, reorder, selectionBounds, setPathNodes, solid, transformWorld, ungroupElements, worldMatrix,
-  expandStroke, offsetPath, allElementIds, moveElement, solidOf, hitTestChildren, childrenInRect, addGuide, moveGuide, removeGuide, clearGuides, booleanOperation, makeCompoundPath, releaseCompoundPaths, type BooleanOp,
+  expandStroke, offsetPath, allElementIds, moveElement, worldBounds, solidOf, hitTestChildren, childrenInRect, addGuide, moveGuide, removeGuide, clearGuides, booleanOperation, makeCompoundPath, releaseCompoundPaths, type BooleanOp,
   patchText, textOnPath, releaseTextPath, type TextPatch,
   alignElements, distributeElements, makeClippingMask, releaseClippingMask, type AlignMode, type DistributeMode,
   type Artboard, type Element, type Paint, type PathElement, type Stroke, type VDocument, type ZOrder,
 } from '../core/document';
 import { apply, applyVector, translate } from '../core/geometry/matrix';
+import { pointInPolygon } from '../core/geometry/path';
 import type { Matrix, PathNode, Rect, Vec } from '../core/geometry/types';
 import { Viewport } from './viewport';
 import type { OverlayModel, PointerInfo, Tool, ToolId } from './types';
 import { createTools } from './tools';
+import { DEFAULT_TOOL_OPTIONS, type ToolOptions } from './tools/draw';
 import { collectTargets, snapBoxMove, snapPointTo, type SnapTargets } from './snap';
 
 export interface DefaultStyle {
@@ -57,6 +59,10 @@ export class Editor {
   dragging = false;
   /** Bumped when the UI should focus the text editor in the Typography panel. */
   textFocusTick = 0;
+  /** Settings of the shape/pencil tools (sides, corner radius, …). */
+  toolOptions: ToolOptions = { ...DEFAULT_TOOL_OPTIONS };
+  /** Lasso polygon while dragging. */
+  lasso: Vec[] | null = null;
   /** True while the in-place text box over the canvas is open. */
   textEditing = false;
   /** Group being edited in isolation mode (only its children can be picked; the rest is dimmed). */
@@ -537,6 +543,78 @@ export class Editor {
     this.apply('Rename layers', (d) => d.layers.forEach((l, i) => { l.name = pattern.replace(/\{n\}/g, String(i + 1)).replace(/\{name\}/g, l.name); }));
   }
 
+  // ---- picking / appearance tools ----
+  /** Top-level objects on visible, unlocked layers. */
+  topLevelObjects(): Element[] {
+    return this.doc.layers.filter((l) => l.visible && !l.locked).flatMap((l) => l.children.filter((e) => e.visible && !e.locked));
+  }
+  /** True if any anchor of the object, or its centre, lies inside the polygon. */
+  objectTouchesPolygon(el: Element, poly: Vec[]): boolean {
+    const inside = (p: Vec) => pointInPolygon(poly, p);
+    const b = worldBoundsOf(this.doc, el.id);
+    if (b && inside({ x: b.x + b.w / 2, y: b.y + b.h / 2 })) return true;
+    const walk = (e: Element): boolean => {
+      if (e.type === 'group') return e.children.some(walk);
+      const wn = this.worldNodes(e.id);
+      return !!wn && wn.nodes.some((n) => inside({ x: n.x, y: n.y }));
+    };
+    return walk(el);
+  }
+  /** Copy fill/stroke/opacity of `id` onto the selection, or onto the default style when nothing is selected. */
+  sampleAppearance(id: string): void {
+    const src = getElement(this.doc, id);
+    if (!src || src.type === 'group') return;
+    const fill = src.fill ? structuredClone(src.fill) : null, stroke = src.stroke ? structuredClone(src.stroke) : null;
+    this.fillChosen = true;
+    this.style = { fill, stroke };
+    const ids = this.selection.filter((s) => s !== id);
+    if (ids.length) this.apply('Eyedropper', (d) => patchElements(d, ids, { fill, stroke, opacity: src.opacity }));
+    else this.emit();
+  }
+  /** Select all shapes whose fill (or stroke) equals that of `id`. */
+  selectSimilar(id: string, by: 'fill' | 'stroke', additive = false): void {
+    const src = getElement(this.doc, id);
+    if (!src || src.type === 'group') return;
+    const key = (e: Element) => (e.type === 'group' ? null : JSON.stringify(by === 'fill' ? e.fill : e.stroke?.paint ?? null));
+    const want = key(src);
+    const out: string[] = [];
+    const walk = (list: Element[]) => list.forEach((e) => { if (!e.visible || e.locked) return; if (e.type === 'group') walk(e.children); else if (key(e) === want) out.push(e.id); });
+    this.doc.layers.forEach((l) => { if (l.visible && !l.locked) walk(l.children); });
+    this.select(additive ? [...new Set([...this.selection, ...out])] : out);
+    this.setStatus(`Selected ${out.length} object(s) with the same ${by}`);
+  }
+  applyGradientDrag(a: Vec, b: Vec, make: (el: Element, bounds: Rect, a: Vec, b: Vec) => Paint | null): void {
+    const ids = [...this.selection];
+    this.history.update((d) => {
+      for (const id of ids) {
+        const loc = locate(d, id);
+        const wb = worldBoundsOf(d, id);
+        if (!loc || !wb) continue;
+        const apply = (el: Element, bounds: Rect) => {
+          if (el.type === 'group') { el.children.forEach((c) => { const cb = worldBoundsOf(d, c.id); if (cb) apply(c, cb); }); return; }
+          const p = make(el, bounds, a, b);
+          if (p) el.fill = p;
+        };
+        apply(loc.element, wb);
+      }
+    });
+    this.emit();
+  }
+  moveArtboardWithArtwork(artboardId: string, from: Rect, dx: number, dy: number): void {
+    this.history.update((d) => {
+      const ab = d.artboards.find((x) => x.id === artboardId);
+      if (!ab) return;
+      const inside: string[] = [];
+      for (const l of d.layers) for (const el of l.children) {
+        const b = worldBoundsOf(d, el.id);
+        if (b && b.x >= from.x && b.y >= from.y && b.x + b.w <= from.x + from.w && b.y + b.h <= from.y + from.h) inside.push(el.id);
+      }
+      ab.x = from.x + dx; ab.y = from.y + dy;
+      if (inside.length) transformWorld(d, inside, translate(dx, dy));
+    });
+    this.emit();
+  }
+
   convertSelectionToPaths(): void {
     const ids = this.selection.filter((id) => { const t = getElement(this.doc, id)?.type; return t === 'rect' || t === 'ellipse' || t === 'text'; });
     if (!ids.length) return;
@@ -718,6 +796,7 @@ export class Editor {
       marquee: this.marquee,
       pen: this.penPreview,
       rubber: this.rubber,
+      lasso: this.lasso,
     };
   }
 
@@ -758,3 +837,5 @@ export function invertLinear(m: Matrix): Matrix | null {
   if (!isFinite(det) || Math.abs(det) < 1e-12) return null;
   return [m[3] / det, -m[1] / det, -m[2] / det, m[0] / det, 0, 0];
 }
+
+function worldBoundsOf(doc: VDocument, id: string): Rect | null { return worldBounds(doc, id); }
