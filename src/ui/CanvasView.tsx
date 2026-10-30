@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { renderView } from '../render/canvas2d';
-import { drawOverlay } from '../render/overlay';
+import { drawGuides, drawOverlay, drawRulers } from '../render/overlay';
+import { RULER } from '../editor/editor';
 import { useApp } from './hooks';
 import { useUi } from './store';
 
@@ -53,7 +54,10 @@ export function CanvasView() {
         return { canvas: c, ctx: c.getContext('2d')! };
       };
       renderView(ctx, ed.doc, { zoom: ed.viewport.zoom, panX: ed.viewport.panX, panY: ed.viewport.panY, width: ed.viewport.width, height: ed.viewport.height, dpr, activeArtboardId: ed.activeArtboardId }, { makeCanvas: off });
+      if (ed.showRulers) drawGuides(ctx, ed.doc.guides ?? [], ed.snapLines, ed.viewport, dpr);
+      else drawGuides(ctx, [], ed.snapLines, ed.viewport, dpr);
       drawOverlay(ctx, ed.getOverlay(), ed.viewport, dpr);
+      if (ed.showRulers) drawRulers(ctx, ed.viewport, dpr, RULER, ed.hover);
     });
     return () => cancelAnimationFrame(raf.current);
   });
@@ -73,6 +77,11 @@ export function CanvasView() {
       return;
     }
     if (e.button !== 0) return;
+    if (ed.showRulers && (p.x < RULER || p.y < RULER)) {
+      if (p.x < RULER && p.y < RULER) return; // corner
+      ed.startRulerDrag(p.x < RULER ? 'v' : 'h', p.x, p.y);
+      return;
+    }
     // Clicking the canvas should not leave a text field focused.
     (document.activeElement as HTMLElement | null)?.blur?.();
     ed.pointerDown(p.x, p.y, { shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey || e.metaKey, detail: e.detail });
@@ -102,7 +111,10 @@ export function CanvasView() {
     return () => canvas.removeEventListener('wheel', onWheel);
   }, [ed]);
 
-  const cursor = spaceDown || ed.panning ? (ed.panning ? 'grabbing' : 'grab') : ed.tool.cursor(ed, ed.hover);
+  const hv = ed.hover ? ed.viewport.toScreen(ed.hover) : null;
+  const onRuler = ed.showRulers && !!hv && (hv.x < RULER || hv.y < RULER);
+  const onGuide = !onRuler && ed.showRulers && !!ed.hover && (ed.doc.guides ?? []).some((g) => Math.abs((g.axis === 'v' ? ed.hover!.x : ed.hover!.y) - g.pos) <= ed.hitTol(4));
+  const cursor = onRuler ? 'crosshair' : onGuide ? 'move' : spaceDown || ed.panning ? (ed.panning ? 'grabbing' : 'grab') : ed.tool.cursor(ed, ed.hover);
   return (
     <div ref={wrap} className="relative flex-1 min-w-0 min-h-0 overflow-hidden" data-testid="canvas-wrap">
       <canvas

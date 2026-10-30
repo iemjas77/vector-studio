@@ -1,5 +1,6 @@
 import { apply, applyVector, multiply, invert } from '../geometry/matrix';
 import type { Matrix, PathNode } from '../geometry/types';
+import { newId } from './ids';
 import { createArtboard, createGroup, createLayer, createPath } from './factory';
 import { locate, parentMatrix, worldMatrix } from './query';
 import { cloneWithNewIds, elementSubpaths, toPathElement } from './shape';
@@ -282,4 +283,21 @@ export function releaseCompoundPaths(doc: VDocument, ids: readonly string[]): st
     out.push(...parts.map((x) => x.id));
   }
   return out;
+}
+
+// ---- guides ----
+export function addGuide(doc: VDocument, axis: 'v' | 'h', pos: number, id?: string): string {
+  const g = { id: id ?? newId(), axis, pos };
+  (doc.guides ??= []).push(g);
+  return g.id;
+}
+export function moveGuide(doc: VDocument, id: string, pos: number): void {
+  const g = doc.guides?.find((x) => x.id === id);
+  if (g) g.pos = pos;
+}
+export function removeGuide(doc: VDocument, id: string): void {
+  if (doc.guides) doc.guides = doc.guides.filter((g) => g.id !== id);
+}
+export function clearGuides(doc: VDocument): void {
+  if (doc.guides?.length) doc.guides = [];
 }

@@ -420,3 +420,23 @@ test('gradient fill: switch to linear, edit stops and angle, switch to radial an
   await page.getByTestId('fill-type-solid').click();
   expect(((await elements(page))[0] as never as { fill: { type: string; color: string } }).fill).toMatchObject({ type: 'solid', color: '#ff0000' });
 });
+
+test('rulers: drag a guide from the ruler, snap a new shape to it, toggle rulers from the View menu', async ({ page }) => {
+  const box = (await page.getByTestId('canvas').boundingBox())!;
+  const target = await docToPage(page, 600, 500);
+  await page.mouse.move(box.x + 8, target.y);          // inside the left ruler strip
+  await page.mouse.down();
+  await page.mouse.move(target.x, target.y, { steps: 6 });
+  await page.mouse.up();
+  const guides = (await docOf(page)).guides as { axis: string; pos: number }[];
+  expect(guides).toHaveLength(1);
+  expect(guides[0].axis).toBe('v');
+  expect(Math.abs(guides[0].pos - 600)).toBeLessThan(1.5);
+  await page.keyboard.press('m');
+  await dragDoc(page, 100, 100, guides[0].pos - 2, 300); // ends 2 doc units short of the guide
+  const r = (await elements(page))[0] as unknown as { x: number; w: number };
+  expect(r.x + r.w).toBeCloseTo(guides[0].pos, 6);
+  await page.getByRole('menubar').getByText('View', { exact: true }).click();
+  await page.getByTestId('menu-view.rulers').click();
+  expect(await page.evaluate(() => (window as unknown as { __vs: { workspace: { current: { showRulers: boolean } } } }).__vs.workspace.current.showRulers)).toBe(false);
+});

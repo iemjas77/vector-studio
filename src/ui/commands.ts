@@ -18,6 +18,8 @@ export interface Command {
   /** Display + matching string, e.g. "Ctrl+Shift+Z". Letters are matched case-insensitively. */
   shortcut?: string;
   enabled?(app: App): boolean;
+  /** For toggle commands: shows a check mark in menus. */
+  checked?(app: App): boolean;
   run(app: App): void | Promise<void>;
 }
 
@@ -178,6 +180,9 @@ export const COMMANDS: Command[] = [
   { id: 'view.zoomOut', label: 'Zoom Out', shortcut: 'Ctrl+-', run: (a) => a.ed.zoomBy(0.8) },
   { id: 'view.fit', label: 'Fit Artboard in Window', shortcut: 'Ctrl+0', run: (a) => a.ed.fitArtboard() },
   { id: 'view.fitAll', label: 'Fit All in Window', shortcut: 'Ctrl+Alt+0', run: (a) => a.ed.fitAll() },
+  { id: 'view.rulers', label: 'Rulers', shortcut: 'Ctrl+R', checked: (a) => a.ed.showRulers, run: (a) => a.ed.toggleRulers() },
+  { id: 'view.snap', label: 'Snap to Guides and Objects', shortcut: 'Ctrl+;', checked: (a) => a.ed.snapEnabled, run: (a) => a.ed.toggleSnap() },
+  { id: 'view.clearGuides', label: 'Clear Guides', enabled: (a) => (a.ed.doc.guides ?? []).length > 0, run: (a) => a.ed.clearGuides() },
   { id: 'view.actual', label: 'Actual Size', shortcut: 'Ctrl+1', run: (a) => a.ed.zoomTo(1) },
 
   tool('select', 'Selection Tool', 'V'),

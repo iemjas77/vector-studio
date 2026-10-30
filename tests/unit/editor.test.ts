@@ -501,3 +501,60 @@ describe('align / distribute / clipping through the editor', () => {
     expect(els(e)).toHaveLength(2);
   });
 });
+
+describe('guides and snapping', () => {
+  it('drag a guide out of the ruler, move it, delete it by dragging back; each is one undo step', () => {
+    const e = ed();
+    e.startRulerDrag('v', 10, 200);          // from the left ruler strip
+    e.pointerMove(300, 200);
+    e.pointerUp(300, 200);
+    expect(e.doc.guides).toEqual([expect.objectContaining({ axis: 'v', pos: 300 })]);
+    e.pointerDown(300, 250); e.pointerMove(340, 250); e.pointerUp(340, 250); // grab the existing guide
+    expect(e.doc.guides![0].pos).toBe(340);
+    e.pointerDown(340, 250); e.pointerMove(5, 250); e.pointerUp(5, 250);     // drop on the ruler → delete
+    expect(e.doc.guides).toEqual([]);
+    e.undo(); expect(e.doc.guides![0].pos).toBe(340);
+    e.undo(); expect(e.doc.guides![0].pos).toBe(300);
+    e.undo(); expect(e.doc.guides ?? []).toEqual([]);
+  });
+  it('snaps drawing to guides, artboard edges and object edges; ctrl bypasses; toggle disables', () => {
+    const e = ed(800, 600);
+    e.apply('guide', (d) => { d.guides = [{ id: 'g1', axis: 'v', pos: 300 }]; });
+    e.setTool('rect');
+    drag(e, 100, 100, 297, 200);               // right edge 3px from guide → snaps
+    expect(elementBounds(els(e)[0])).toEqual({ x: 100, y: 100, w: 200, h: 100 });
+    drag(e, 100, 300, 297, 350, {}, { ctrl: true });
+    // ctrl only applies to the pointer-down snap in this helper; moves without ctrl still snap, so use explicit sequence:
+    e.pointerDown(100, 400); e.pointerMove(297, 450, { ctrl: true }); e.pointerUp(297, 450, { ctrl: true });
+    expect(elementBounds(els(e)[2])).toEqual({ x: 100, y: 400, w: 197, h: 50 });
+    drag(e, 100, 500, 790, 560);                // 10px from the artboard edge (thr 6) → no snap
+    expect(elementBounds(els(e)[3])!.w).toBe(690);
+    drag(e, 100, 20, 797, 40);                  // 3px from artboard right edge 800 → snaps
+    expect(elementBounds(els(e)[4])!.w).toBe(700);
+    e.toggleSnap();
+    drag(e, 100, 70, 297, 90);
+    expect(elementBounds(els(e)[5])!.w).toBe(197);
+  });
+  it('snaps a moved selection by its edges or centre to other objects', () => {
+    const e = ed();
+    e.snapEnabled = true;
+    const a = createRect(300, 100, 100, 100), b = createRect(100, 300, 60, 60);
+    e.apply('seed', (d) => { addElement(d, a); addElement(d, b); });
+    e.setTool('select');
+    drag(e, 130, 330, 183, 128);               // b's left would land at 153, right edge 213: nothing near; centre x 183
+    // b centre x = 130+... move delta (53,-202): b.x=153 → none within 6 of 300/350/400; top y=98 → near a.top (100) → snaps
+    expect(worldBounds(e.doc, b.id)!.y).toBeCloseTo(100);
+    expect(worldBounds(e.doc, b.id)!.x).toBeCloseTo(153);
+    e.undo();
+    drag(e, 130, 330, 273, 330);               // b right edge → 100+60+143 = 303 → snaps to a.left 300
+    expect(worldBounds(e.doc, b.id)!.x + 60).toBeCloseTo(300);
+  });
+  it('guides survive save/open and reject duplicate ids', () => {
+    const e = ed();
+    e.apply('g', (d) => { d.guides = [{ id: 'gx', axis: 'h', pos: 12.5 }]; });
+    expect(parseDocument(serializeDocument(e.doc))).toEqual(e.doc);
+    const bad = JSON.parse(serializeDocument(e.doc));
+    bad.guides.push({ id: 'gx', axis: 'v', pos: 1 });
+    expect(() => parseDocument(JSON.stringify(bad))).toThrow(/Duplicate id/);
+  });
+});

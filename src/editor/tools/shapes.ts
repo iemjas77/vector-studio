@@ -2,6 +2,7 @@ import { addElement, createEllipse, createRect, newId, type Element } from '../.
 import type { Rect, Vec } from '../../core/geometry/types';
 import type { Editor } from '../editor';
 import type { PointerInfo, Tool } from '../types';
+import type { SnapTargets } from '../snap';
 
 /** Rectangle from drag points: shift = square, alt = from centre. */
 export function dragRect(a: Vec, b: Vec, shift: boolean, alt: boolean): Rect {
@@ -20,6 +21,7 @@ function shapeTool(kind: 'rect' | 'ellipse'): Tool {
   let startScreen: Vec = { x: 0, y: 0 };
   let id = '';
   let began = false;
+  let targets: SnapTargets = { xs: [], ys: [] };
 
   const build = (ed: Editor, r: Rect): Element => {
     const fill = ed.style.fill, stroke = ed.style.stroke;
@@ -31,13 +33,14 @@ function shapeTool(kind: 'rect' | 'ellipse'): Tool {
   return {
     id: kind, label: kind === 'rect' ? 'Rectangle' : 'Ellipse', shortcut: kind === 'rect' ? 'M' : 'L',
     cursor: () => 'crosshair',
-    down(_ed, e) {
-      start = e.p; startScreen = e.screen; id = newId(); began = false;
+    down(ed, e) {
+      targets = ed.snapTargets();
+      start = ed.snapPoint(e.p, targets, e.ctrl); startScreen = e.screen; id = newId(); began = false;
     },
     move(ed, e: PointerInfo) {
       if (!start) return;
       if (!began && Math.hypot(e.screen.x - startScreen.x, e.screen.y - startScreen.y) < 3) return;
-      const r = dragRect(start, e.p, e.shift, e.alt);
+      const r = dragRect(start, ed.snapPoint(e.p, targets, e.ctrl), e.shift, e.alt);
       ed.rubber = r;
       if (r.w < 1e-6 || r.h < 1e-6) return;
       if (!began) { ed.history.begin(); began = true; }
@@ -49,7 +52,7 @@ function shapeTool(kind: 'rect' | 'ellipse'): Tool {
     up(ed, e) {
       ed.rubber = null;
       if (began && start) {
-        const r = dragRect(start, e.p, e.shift, e.alt);
+        const r = dragRect(start, ed.snapPoint(e.p, targets, e.ctrl), e.shift, e.alt);
         if (r.w < 0.5 || r.h < 0.5) ed.history.cancel();
         else ed.history.commit(kind === 'rect' ? 'Draw rectangle' : 'Draw ellipse');
         ed.selection = r.w < 0.5 || r.h < 0.5 ? [] : [id];

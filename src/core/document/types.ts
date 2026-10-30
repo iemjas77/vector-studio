@@ -117,6 +117,13 @@ export interface Artboard {
   background: string | null;
 }
 
+export interface Guide {
+  id: string;
+  /** 'v' = vertical line at x = pos, 'h' = horizontal line at y = pos (document units). */
+  axis: 'v' | 'h';
+  pos: number;
+}
+
 export interface VDocument {
   format: typeof FORMAT_NAME;
   version: number;
@@ -126,4 +133,5 @@ export interface VDocument {
   ppi: number;
   artboards: Artboard[];
   layers: Layer[];
+  guides?: Guide[];
 }

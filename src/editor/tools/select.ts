@@ -2,6 +2,7 @@ import { aboutPoint, rotate, scale, translate } from '../../core/geometry/matrix
 import { duplicateElements, getElement, hitTest, newId, transformWorld } from '../../core/document';
 import type { Rect, Vec } from '../../core/geometry/types';
 import type { Editor } from '../editor';
+import type { SnapTargets } from '../snap';
 import type { PointerInfo, Tool } from '../types';
 
 export interface HandleDef { hx: -1 | 0 | 1; hy: -1 | 0 | 1; }
@@ -31,6 +32,8 @@ export function selectTool(): Tool {
   let shiftOnDown = false;
   let toggledOff = false;
   let altCopy = false;
+  let snapT: SnapTargets = { xs: [], ys: [] };
+  let bbox0: Rect | null = null;
   let dupIds: string[] = [];
 
   const reset = () => { mode = 'none'; moved = false; handle = null; toggledOff = false; altCopy = false; dupIds = []; };
@@ -58,7 +61,7 @@ export function selectTool(): Tool {
         for (const h of HANDLES) {
           const hp = handlePoint(b, h);
           if (Math.hypot(hp.x - e.p.x, hp.y - e.p.y) <= tol) {
-            mode = 'scale'; handle = h; bbox = b; ids = [...ed.selection];
+            mode = 'scale'; handle = h; bbox = b; ids = [...ed.selection]; snapT = ed.snapTargets(ids);
             ed.history.begin();
             return;
           }
@@ -83,6 +86,8 @@ export function selectTool(): Tool {
         } else if (!ed.selection.includes(hit)) ed.select([hit]);
         mode = 'move';
         ids = [...ed.selection];
+        snapT = ed.snapTargets(ids);
+        bbox0 = ed.selectionBounds();
         ed.history.begin();
         altCopy = e.alt && !toggledOff;
         dupIds = [];
@@ -104,6 +109,7 @@ export function selectTool(): Tool {
         if (toggledOff) return;
         let dx = e.p.x - start.x, dy = e.p.y - start.y;
         if (e.shift) { if (Math.abs(dx) > Math.abs(dy)) dy = 0; else dx = 0; }
+        if (bbox0) ({ dx, dy } = ed.snapMove(bbox0, dx, dy, snapT, e.shift && dx === 0, e.shift && dy === 0, e.ctrl));
         ed.history.restoreBase();
         if (altCopy) {
           // Alt-drag: leave the originals and drag copies. Copies keep stable top-level ids across move events.
@@ -119,11 +125,12 @@ export function selectTool(): Tool {
       if (!bbox) return;
       if (mode === 'scale' && handle) {
         const h = handle;
+        const sp = ed.snapPoint(e.p, snapT, e.ctrl);
         const ax = e.alt || h.hx === 0 ? bbox.x + bbox.w / 2 : bbox.x + ((1 - h.hx) / 2) * bbox.w;
         const ay = e.alt || h.hy === 0 ? bbox.y + bbox.h / 2 : bbox.y + ((1 - h.hy) / 2) * bbox.h;
         const ex = bbox.x + ((h.hx + 1) / 2) * bbox.w, ey = bbox.y + ((h.hy + 1) / 2) * bbox.h;
-        let sx = h.hx === 0 || Math.abs(ex - ax) < 1e-9 ? 1 : (e.p.x - ax) / (ex - ax);
-        let sy = h.hy === 0 || Math.abs(ey - ay) < 1e-9 ? 1 : (e.p.y - ay) / (ey - ay);
+        let sx = h.hx === 0 || Math.abs(ex - ax) < 1e-9 ? 1 : (sp.x - ax) / (ex - ax);
+        let sy = h.hy === 0 || Math.abs(ey - ay) < 1e-9 ? 1 : (sp.y - ay) / (ey - ay);
         if (e.shift) {
           const s = h.hx === 0 ? sy : h.hy === 0 ? sx : Math.max(Math.abs(sx), Math.abs(sy));
           const sgnX = sx < 0 ? -1 : 1, sgnY = sy < 0 ? -1 : 1;

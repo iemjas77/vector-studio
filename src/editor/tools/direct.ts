@@ -5,6 +5,7 @@ import type { Matrix, PathNode, Rect, Vec } from '../../core/geometry/types';
 import { invertLinear, type Editor } from '../editor';
 import type { Tool } from '../types';
 import { normRect } from './select';
+import type { SnapTargets } from '../snap';
 
 type Mode = 'none' | 'node' | 'handle' | 'segment' | 'move' | 'marquee';
 const DRAG_THRESHOLD = 3;
@@ -40,6 +41,7 @@ export function directTool(): Tool {
   let baseW: Record<string, Matrix> = {};
   let handleInfo: { id: string; index: number; which: 'in' | 'out'; linked: boolean } | null = null;
   let segInfo: { id: string; seg: number; t: number } | null = null;
+  let snapT: SnapTargets = { xs: [], ys: [] };
 
   const reset = () => { mode = 'none'; moved = false; handleInfo = null; segInfo = null; baseNodes = {}; baseW = {}; };
 
@@ -102,6 +104,7 @@ export function directTool(): Tool {
           mode = 'node';
           ids = Object.keys(ed.nodeSelection).filter((k) => ed.nodeSelection[k].length);
           snapshot(ed, ids);
+          snapT = ed.snapTargets();
           ed.history.begin();
           return;
         }
@@ -163,12 +166,23 @@ export function directTool(): Tool {
         ed.history.update((d) => transformWorld(d, ids, translate(mx, my)));
         return;
       }
+      let ndx = dx, ndy = dy;
+      if (mode === 'node' && ids.length) {
+        // Snap the first dragged anchor; everything else moves by the same adjusted delta.
+        const id0 = ids[0], i0 = (ed.nodeSelection[id0] ?? [])[0];
+        const bn = baseNodes[id0]?.[i0];
+        if (bn) {
+          const w0 = apply(baseW[id0], bn);
+          const sp = ed.snapPoint({ x: w0.x + dx, y: w0.y + dy }, snapT, e.ctrl);
+          ndx = sp.x - w0.x; ndy = sp.y - w0.y;
+        }
+      }
       if (mode === 'node') {
         ed.history.update((d) => {
           for (const id of ids) {
             const inv = invertLinear(baseW[id]);
             if (!inv || !baseNodes[id]) continue;
-            const ld = applyVector(inv, { x: dx, y: dy });
+            const ld = applyVector(inv, { x: ndx, y: ndy });
             const sel = ed.nodeSelection[id] ?? [];
             setPathNodes(d, id, baseNodes[id].map((n, i) => (sel.includes(i) ? { ...n, x: n.x + ld.x, y: n.y + ld.y } : { ...n })));
           }

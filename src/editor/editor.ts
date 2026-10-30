@@ -2,7 +2,7 @@ import {
   History, addElement, addArtboard, addLayer, convertToPath, createDocument, defaultStroke, duplicateElements, elementBounds, elementNodes,
   elementsInRect, getElement, groupElements, hitTest, insertCopies, locate, moveLayer, parentMatrix, patchArtboard, patchElements, patchLayer,
   removeArtboard, removeElements, removeLayer, reorder, selectionBounds, setPathNodes, solid, transformWorld, ungroupElements, worldMatrix,
-  allElementIds, moveElement, solidOf, booleanOperation, makeCompoundPath, releaseCompoundPaths, type BooleanOp,
+  allElementIds, moveElement, solidOf, addGuide, moveGuide, removeGuide, clearGuides, booleanOperation, makeCompoundPath, releaseCompoundPaths, type BooleanOp,
   alignElements, distributeElements, makeClippingMask, releaseClippingMask, type AlignMode, type DistributeMode,
   type Artboard, type Element, type Paint, type PathElement, type Stroke, type VDocument, type ZOrder,
 } from '../core/document';
@@ -11,6 +11,7 @@ import type { Matrix, PathNode, Rect, Vec } from '../core/geometry/types';
 import { Viewport } from './viewport';
 import type { OverlayModel, PointerInfo, Tool, ToolId } from './types';
 import { createTools } from './tools';
+import { collectTargets, snapBoxMove, snapPointTo, type SnapTargets } from './snap';
 
 export interface DefaultStyle {
   fill: Paint | null;
@@ -18,6 +19,9 @@ export interface DefaultStyle {
 }
 
 type Listener = () => void;
+
+/** Width of the ruler strips in CSS px (drawn by the canvas view). */
+export const RULER = 20;
 
 /**
  * Editor controller: owns the document history, selection, viewport and active tool.
@@ -48,6 +52,12 @@ export class Editor {
   rubber: Rect | null = null;
   penPreview: OverlayModel['pen'] = null;
   dragging = false;
+  // Rulers, guides, snapping
+  snapEnabled = true;
+  showRulers = true;
+  /** Active snap lines to draw while dragging (document coordinates). */
+  snapLines: { x: number | null; y: number | null } = { x: null, y: null };
+  private guideDrag: { id: string; created: boolean } | null = null;
 
   private listeners = new Set<Listener>();
   private panStart: { sx: number; sy: number; px: number; py: number } | null = null;
@@ -125,11 +135,75 @@ export class Editor {
 
   hitTol(px = 5): number { return px / this.viewport.zoom; }
 
+  // ---- snapping ----
+  snapTargets(exclude: Iterable<string> = []): SnapTargets { return collectTargets(this.doc, new Set(exclude)); }
+  snapPoint(p: Vec, t: SnapTargets, bypass = false): Vec {
+    if (!this.snapEnabled || bypass) { this.snapLines = { x: null, y: null }; return p; }
+    const r = snapPointTo(p, t, this.hitTol(6));
+    this.snapLines = { x: r.lineX, y: r.lineY };
+    return r.value;
+  }
+  snapMove(b: Rect, dx: number, dy: number, t: SnapTargets, lockX = false, lockY = false, bypass = false): { dx: number; dy: number } {
+    if (!this.snapEnabled || bypass) { this.snapLines = { x: null, y: null }; return { dx, dy }; }
+    const r = snapBoxMove(b, dx, dy, t, this.hitTol(6), lockX, lockY);
+    this.snapLines = { x: r.lineX, y: r.lineY };
+    return r.value;
+  }
+
+  // ---- guides ----
+  /** Start dragging a new guide out of a ruler (`axis` 'v' = from the left ruler). */
+  beginNewGuide(axis: 'v' | 'h', sx: number, sy: number): void {
+    const p = this.viewport.toDoc(sx, sy);
+    this.history.begin();
+    let id = '';
+    this.history.update((d) => { id = addGuide(d, axis, axis === 'v' ? p.x : p.y); });
+    this.guideDrag = { id, created: true };
+    this.emit();
+  }
+  /** Pointer went down on a ruler strip: drag a new guide out of it. */
+  startRulerDrag(axis: 'v' | 'h', sx: number, sy: number): void {
+    this.dragging = true;
+    this.beginNewGuide(axis, sx, sy);
+  }
+  /** Returns true if a guide is under the screen point and a drag of it has started. */
+  tryBeginGuideDrag(sx: number, sy: number): boolean {
+    if (!this.showRulers) return false;
+    const p = this.viewport.toDoc(sx, sy), tol = this.hitTol(4);
+    const g = (this.doc.guides ?? []).find((x) => Math.abs((x.axis === 'v' ? p.x : p.y) - x.pos) <= tol);
+    if (!g) return false;
+    this.history.begin();
+    this.guideDrag = { id: g.id, created: false };
+    return true;
+  }
+  get draggingGuide(): boolean { return this.guideDrag !== null; }
+  moveGuideTo(sx: number, sy: number): void {
+    if (!this.guideDrag) return;
+    const g = this.doc.guides?.find((x) => x.id === this.guideDrag!.id);
+    if (!g) return;
+    const p = this.viewport.toDoc(sx, sy);
+    const pos = g.axis === 'v' ? p.x : p.y;
+    this.history.update((d) => moveGuide(d, g.id, pos));
+    this.emit();
+  }
+  /** Finish a guide drag. Releasing over the ruler strip (`overRuler`) deletes the guide. */
+  endGuideDrag(overRuler: boolean): void {
+    if (!this.guideDrag) return;
+    const { id, created } = this.guideDrag;
+    this.guideDrag = null;
+    if (overRuler) this.history.update((d) => removeGuide(d, id));
+    this.history.commit(overRuler ? 'Delete guide' : created ? 'Add guide' : 'Move guide');
+    this.emit();
+  }
+  clearGuides(): void { this.apply('Clear guides', (d) => clearGuides(d)); }
+  toggleSnap(): void { this.snapEnabled = !this.snapEnabled; this.emit(); }
+  toggleRulers(): void { this.showRulers = !this.showRulers; this.emit(); }
+
   private info(sx: number, sy: number, m: { shift?: boolean; alt?: boolean; ctrl?: boolean; detail?: number }): PointerInfo {
     return { p: this.viewport.toDoc(sx, sy), screen: { x: sx, y: sy }, shift: !!m.shift, alt: !!m.alt, ctrl: !!m.ctrl, detail: m.detail ?? 1 };
   }
 
   pointerDown(sx: number, sy: number, m: { shift?: boolean; alt?: boolean; ctrl?: boolean; detail?: number } = {}): void {
+    if (this.tryBeginGuideDrag(sx, sy)) { this.dragging = true; this.emit(); return; }
     this.dragging = true;
     this.tool.down(this, this.info(sx, sy, m));
     this.emit();
@@ -137,20 +211,25 @@ export class Editor {
   pointerMove(sx: number, sy: number, m: { shift?: boolean; alt?: boolean; ctrl?: boolean } = {}): void {
     const e = this.info(sx, sy, m);
     this.hover = e.p;
-    if (this.dragging) this.tool.move(this, e);
+    if (this.guideDrag) this.moveGuideTo(sx, sy);
+    else if (this.dragging) this.tool.move(this, e);
     else if (this.toolId === 'pen') this.tool.move(this, e);
     this.emit();
   }
   pointerUp(sx: number, sy: number, m: { shift?: boolean; alt?: boolean; ctrl?: boolean } = {}): void {
     if (!this.dragging) return;
     this.dragging = false;
+    if (this.guideDrag) { this.endGuideDrag(sx < RULER || sy < RULER); this.snapLines = { x: null, y: null }; this.emit(); return; }
     this.tool.up(this, this.info(sx, sy, m));
+    this.snapLines = { x: null, y: null };
     this.emit();
   }
 
   /** Abort any in-progress gesture, restoring the document to its pre-gesture state. */
   cancelGesture(): void {
     this.dragging = false;
+    this.guideDrag = null;
+    this.snapLines = { x: null, y: null };
     this.marquee = null;
     this.rubber = null;
     this.tool.cancel?.(this);

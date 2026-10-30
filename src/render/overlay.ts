@@ -98,3 +98,78 @@ function vp2(vp: Viewport, n: { x: number; y: number }) {
   const p = vp.toScreen(n);
   return { x: p.x, y: p.y };
 }
+
+const GUIDE = '#18c8c8';
+const SNAP = '#ff3da8';
+
+/** Guides and active snap lines, drawn across the whole viewport. */
+export function drawGuides(ctx: CanvasRenderingContext2D, guides: readonly { axis: 'v' | 'h'; pos: number }[], snap: { x: number | null; y: number | null }, vp: Viewport, dpr: number): void {
+  ctx.save();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.lineWidth = 1;
+  const line = (axis: 'v' | 'h', pos: number, color: string, dash: number[]) => {
+    ctx.strokeStyle = color;
+    ctx.setLineDash(dash);
+    ctx.beginPath();
+    if (axis === 'v') { const x = Math.round(pos * vp.zoom + vp.panX) + 0.5; ctx.moveTo(x, 0); ctx.lineTo(x, vp.height); }
+    else { const y = Math.round(pos * vp.zoom + vp.panY) + 0.5; ctx.moveTo(0, y); ctx.lineTo(vp.width, y); }
+    ctx.stroke();
+  };
+  for (const g of guides) line(g.axis, g.pos, GUIDE, []);
+  if (snap.x !== null) line('v', snap.x, SNAP, [4, 3]);
+  if (snap.y !== null) line('h', snap.y, SNAP, [4, 3]);
+  ctx.restore();
+}
+
+/** Pick a "nice" tick step (1, 2, 5 × 10^n) giving ≥ minPx between major ticks. */
+export function rulerStep(zoom: number, minPx = 60): number {
+  const raw = minPx / zoom;
+  const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+  for (const m of [1, 2, 5, 10]) if (m * pow >= raw) return m * pow;
+  return 10 * pow;
+}
+
+export function drawRulers(ctx: CanvasRenderingContext2D, vp: Viewport, dpr: number, size: number, hover: { x: number; y: number } | null): void {
+  ctx.save();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = '#2a2a2a';
+  ctx.fillRect(0, 0, vp.width, size);
+  ctx.fillRect(0, 0, size, vp.height);
+  ctx.strokeStyle = '#555';
+  ctx.beginPath();
+  ctx.moveTo(0, size + 0.5); ctx.lineTo(vp.width, size + 0.5);
+  ctx.moveTo(size + 0.5, 0); ctx.lineTo(size + 0.5, vp.height);
+  ctx.stroke();
+  ctx.fillStyle = '#9a9a9a';
+  ctx.strokeStyle = '#777';
+  ctx.font = '10px system-ui, sans-serif';
+  const step = rulerStep(vp.zoom);
+  const minor = step / 5;
+  const x0 = Math.floor(-vp.panX / vp.zoom / minor) * minor, x1 = (vp.width - vp.panX) / vp.zoom;
+  for (let v = x0; v <= x1; v += minor) {
+    const sx = Math.round(v * vp.zoom + vp.panX) + 0.5;
+    if (sx < size) continue;
+    const major = Math.abs(v / step - Math.round(v / step)) < 1e-6;
+    ctx.beginPath(); ctx.moveTo(sx, major ? 4 : size - 6); ctx.lineTo(sx, size); ctx.stroke();
+    if (major) { ctx.textBaseline = 'top'; ctx.fillText(String(Math.round(v * 100) / 100), sx + 3, 2); }
+  }
+  const y0 = Math.floor(-vp.panY / vp.zoom / minor) * minor, y1 = (vp.height - vp.panY) / vp.zoom;
+  for (let v = y0; v <= y1; v += minor) {
+    const sy = Math.round(v * vp.zoom + vp.panY) + 0.5;
+    if (sy < size) continue;
+    const major = Math.abs(v / step - Math.round(v / step)) < 1e-6;
+    ctx.beginPath(); ctx.moveTo(major ? 4 : size - 6, sy); ctx.lineTo(size, sy); ctx.stroke();
+    if (major) {
+      ctx.save(); ctx.translate(2, sy + 3); ctx.rotate(-Math.PI / 2); ctx.textBaseline = 'top'; ctx.textAlign = 'right';
+      ctx.fillText(String(Math.round(v * 100) / 100), 0, 0); ctx.restore();
+    }
+  }
+  if (hover) {
+    const hs = vp.toScreen(hover);
+    ctx.strokeStyle = '#4d9cff';
+    ctx.beginPath(); ctx.moveTo(hs.x + 0.5, 0); ctx.lineTo(hs.x + 0.5, size); ctx.moveTo(0, hs.y + 0.5); ctx.lineTo(size, hs.y + 0.5); ctx.stroke();
+  }
+  ctx.fillStyle = '#333';
+  ctx.fillRect(0, 0, size, size);
+  ctx.restore();
+}

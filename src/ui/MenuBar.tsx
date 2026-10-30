@@ -7,7 +7,7 @@ const MENUS: { label: string; items: Entry[] }[] = [
   { label: 'File', items: ['file.new', 'file.open', '-', 'file.save', 'file.saveAs', '-', 'file.importSvg', 'file.placeSvg', '-', 'file.exportSvg', 'file.exportPng', '-', 'file.close'] },
   { label: 'Edit', items: ['edit.undo', 'edit.redo', '-', 'edit.cut', 'edit.copy', 'edit.paste', 'edit.pasteInPlace', '-', 'edit.duplicate', 'edit.delete', '-', 'edit.selectAll', 'edit.deselect'] },
   { label: 'Object', items: ['object.group', 'object.ungroup', '-', 'object.front', 'object.forward', 'object.backward', 'object.back', '-', 'object.unite', 'object.subtract', 'object.intersect', 'object.exclude', '-', 'object.makeCompound', 'object.releaseCompound', '-', 'object.makeClip', 'object.releaseClip', '-', 'object.toPath', 'object.swap'] },
-  { label: 'View', items: ['view.zoomIn', 'view.zoomOut', 'view.fit', 'view.fitAll', 'view.actual'] },
+  { label: 'View', items: ['view.zoomIn', 'view.zoomOut', 'view.fit', 'view.fitAll', 'view.actual', '-', 'view.rulers', 'view.snap', 'view.clearGuides'] },
   { label: 'Help', items: ['help.shortcuts', 'help.about'] },
 ];
 
@@ -50,7 +50,7 @@ function MenuItem({ id, app, onDone }: { id: string; app: App; onDone(): void })
   const enabled = c.enabled ? c.enabled(app) : true;
   return (
     <button className="menu-item" role="menuitem" data-testid={`menu-${id}`} disabled={!enabled} onClick={() => { onDone(); void c.run(app); }}>
-      <span>{c.label}</span><span className="text-mute">{c.shortcut ?? ''}</span>
+      <span>{c.checked ? (c.checked(app) ? '✓ ' : '\u2003') : ''}{c.label}</span><span className="text-mute">{c.shortcut ?? ''}</span>
     </button>
   );
 }

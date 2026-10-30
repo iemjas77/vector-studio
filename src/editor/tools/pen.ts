@@ -3,6 +3,7 @@ import { node } from '../../core/geometry/path';
 import type { PathNode, Vec } from '../../core/geometry/types';
 import type { Editor } from '../editor';
 import type { Tool } from '../types';
+import type { SnapTargets } from '../snap';
 
 /**
  * Pen tool. click = corner anchor; click-drag = smooth anchor with symmetric handles;
@@ -14,6 +15,11 @@ export function penTool(): Tool {
   let nodes: PathNode[] = [];
   let dragStart: Vec | null = null; // set while dragging out handles of the newest anchor
   let startScreen: Vec = { x: 0, y: 0 };
+  let targets: SnapTargets | null = null;
+  const snapped = (ed: Editor, p: Vec, bypass: boolean): Vec => {
+    targets ??= ed.snapTargets();
+    return ed.snapPoint(p, targets, bypass);
+  };
 
   const sync = (ed: Editor, closed = false) => {
     if (!id) return;
@@ -38,7 +44,7 @@ export function penTool(): Tool {
       sync(ed, closed);
       ed.history.commit(closed ? 'Draw closed path' : 'Draw path');
     }
-    id = null; nodes = []; dragStart = null;
+    id = null; nodes = []; dragStart = null; targets = null;
     ed.penPreview = null;
   };
 
@@ -49,8 +55,9 @@ export function penTool(): Tool {
   return {
     id: 'pen', label: 'Pen', shortcut: 'P',
     cursor: () => 'crosshair',
-    down(ed, e) {
-      startScreen = e.screen;
+    down(ed, e0) {
+      startScreen = e0.screen;
+      const e = { ...e0, p: snapped(ed, e0.p, e0.ctrl) };
       if (!id) {
         id = newId();
         nodes = [node(e.p.x, e.p.y)];
@@ -80,8 +87,9 @@ export function penTool(): Tool {
       sync(ed);
       preview(ed, p);
     },
-    move(ed, e) {
-      if (!id) return;
+    move(ed, e0) {
+      const e = { ...e0, p: snapped(ed, e0.p, e0.ctrl) };
+      if (!id) { preview(ed, null); return; }
       if (ed.dragging && dragStart) {
         if (Math.hypot(e.screen.x - startScreen.x, e.screen.y - startScreen.y) >= 3) {
           const n = nodes[nodes.length - 1];

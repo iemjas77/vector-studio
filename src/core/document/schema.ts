@@ -57,6 +57,7 @@ const documentSchema = z.object({
     .array(z.object({ id: z.string().min(1), name: z.string(), x: num, y: num, w: num.positive(), h: num.positive(), background: color.nullable() }))
     .min(1),
   layers: z.array(z.object({ id: z.string().min(1), name: z.string(), visible: z.boolean(), locked: z.boolean(), children: z.array(element) })),
+  guides: z.array(z.object({ id: z.string().min(1), axis: z.enum(['v', 'h']), pos: num })).optional(),
 });
 
 function collectIds(els: Element[], seen: Set<string>): void {
@@ -101,6 +102,10 @@ export function validateDocument(data: unknown): VDocument {
   for (const a of doc.artboards) {
     if (seen.has(a.id)) throw new DocumentFormatError(`Duplicate id "${a.id}"`);
     seen.add(a.id);
+  }
+  for (const g of doc.guides ?? []) {
+    if (seen.has(g.id)) throw new DocumentFormatError(`Duplicate id "${g.id}"`);
+    seen.add(g.id);
   }
   for (const l of doc.layers) {
     if (seen.has(l.id)) throw new DocumentFormatError(`Duplicate id "${l.id}"`);
