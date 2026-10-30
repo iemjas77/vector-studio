@@ -23,5 +23,23 @@
 ## ADR-007: Native file format = versioned JSON validated with zod
 *Accepted.* Human-readable, diffable, easy to migrate (`version`), strict on load. Future large assets (images, fonts) will move to a zip container; the JSON document stays the manifest.
 
-## ADR-008: Compound paths deferred; SVG import splits them
-*Accepted (temporary).* The path model is single-subpath in Phase 1. Imported multi-subpath paths are split into a group and the user is warned (holes become filled). Compound paths are Phase 2 priority #1.
+## ADR-008: Compound paths as primary subpath + `extra` subpaths
+*Accepted; implemented in format v2.* A path element keeps `nodes/closed` (so all single-path code is unchanged) and adds `extra[]` subpaths and a `fillRule`. Cost: direct-selection edits only the primary subpath. SVG import keeps multi-subpath paths intact; v1 files migrate on load.
+
+## ADR-009: Text = HarfBuzz layout drawn as outlines
+*Accepted.* One shaping engine (HarfBuzz WASM) produces glyph outlines, so canvas, SVG, PDF, booleans and "Create Outlines" agree exactly, kerning/ligatures/complex scripts are correct, and exports have no font dependency. Cost: no native text in SVG/PDF (outlines only), text cannot be edited in other programs after export, simplified bidi, and CPU cost for large text blocks (mitigated by per-element layout cache).
+
+## ADR-010: Paper.js for boolean operations
+*Accepted.* Preserves Beziers, robust on tangent/coincident cases in our corpus (`tests/unit/boolean.test.ts`: overlapping, shared edges, identical shapes, holes, curves, rotated, groups). Runs headless via `paper-core`. Booleans use fill geometry only (strokes are ignored).
+
+## ADR-011: Own PDF writer, verified with poppler
+*Accepted.* Output is small in scope (paths, gradients, clipping, boxes) and can be checked pixel-wise by rasterising with `pdftoppm`. Limitations are listed in KNOWN-ISSUES (RGB only, uncompressed, simplified transparency).
+
+## ADR-012: No runtime loading of third-party scripts
+*Accepted for now.* Plugins are bundled modules using a narrow API. Evaluating arbitrary JS would need `unsafe-eval` in the CSP and a real sandbox (iframe/worker with message-passing); that design is future work.
+
+## ADR-013: Electron serves the UI from `app://vs/`
+*Accepted.* `file://` blocks `fetch()` of the HarfBuzz `.wasm`. A privileged custom protocol with a path-traversal guard fixes that; CSP allows `'wasm-unsafe-eval'` only.
+
+## ADR-014: Gradients in bounding-box units
+*Accepted.* Gradients follow the object when it is resized and map directly to SVG `objectBoundingBox` and PDF shadings. SVG import converts `userSpaceOnUse` gradients using the element's bounds; `gradientTransform` is not supported.

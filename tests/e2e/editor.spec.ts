@@ -685,5 +685,8 @@ test('bleed field grows the output size and PDF export offers it', async ({ page
   await page.getByTestId('export-format').selectOption('pdf');
   await expect(page.getByTestId('export-bleed')).toBeVisible();
   await page.getByTestId('export-bleed').fill('-3');
-  await expect(page.getByTestId('export-go')).toBeEnabled();   // negative input is treated as 0, not an error
+  await expect(page.getByTestId('export-bleed-error')).toBeVisible();
+  await expect(page.getByTestId('export-go')).toBeDisabled();
+  await page.getByTestId('export-bleed').fill('3');
+  await expect(page.getByTestId('export-go')).toBeEnabled();
 });

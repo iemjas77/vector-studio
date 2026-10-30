@@ -1,27 +1,27 @@
 # Project status
 
-**Milestone reached:** Phase 0 (research/architecture) + Phase 1 (working vector editor). Version 0.1.0 – not released, not packaged.
+**Version 0.2.0 – not released, not packaged, never run on Windows.**
+Phases 0 and 1 are complete. Phases 2–6 are partly implemented (see ROADMAP.md / FEATURE-MATRIX.md for exactly what is and is not done); Phase 7 (Windows RC) has not been started.
 
-## Verified (last full run)
+## Verified (last full run, Linux container)
 | Check | Result |
 |---|---|
 | `npm run typecheck` | clean |
 | `npm run lint` | clean |
-| `npm test` (Vitest, Node) | **112 passed** in 6 files |
-| `npm run test:e2e` (Playwright, real Chromium) | **23 passed** |
-| `xvfb-run -a npm run test:electron` | OK (Linux only) |
+| `npm test` (Vitest, Node) | **210 passed** in 15 files |
+| `npm run test:e2e` (Playwright, real Chromium) | **37 passed** |
+| `xvfb-run -a npm run test:electron` | OK (shape, HarfBuzz text over `app://`, 109 system fonts discovered, native save) |
+| `npm run test:cli` | OK |
 | Windows | **not tested** |
 
-## Measured
-* Render 10 000 mixed objects, 1920×1080: ≈ 130–160 ms overview, ≈ 8 ms zoomed in (culling).
-* Hit-test among 10 000 objects ≈ 11 ms; 20 000-element edit + undo + save/parse well under budget.
-* Serialise + parse 10 000 objects ≈ 80 ms.
-* Circle approximation by 4 Beziers: max radial error 0.03 %.
-* PNG export is pixel exact in size (tested 120×80 … 4500×5400) and alpha; shape edges land within one pointer-mapping pixel.
-(Numbers are from this Linux cloud container; treat as relative, not as Windows performance.)
+## Measured (Linux, Node; relative numbers only)
+* Render 10 000 mixed objects at 1920×1080: ≈ 130–160 ms overview, ≈ 8 ms zoomed in (culling). Hit-test among 10 000 objects ≈ 11 ms. Save + load of 10 000 objects ≈ 80 ms.
+* 4500×5400 transparent PNG export verified in real Chromium (exact size, alpha, 300 ppi metadata).
+* PDF output matches the canvas renderer within anti-aliasing (≤ 1–2 % clearly different pixels, edges only) when rasterised by poppler; SVG output matches Chromium's SVG renderer (< 1 % different pixels).
+* Boolean results match analytic areas within 1 % for curved cases (circle − rectangle, donut) and within about 3 % for rectangles (tolerances of the pixel-counting tests).
 
 ## Code size
-≈ 4 800 lines in `src/`, ≈ 1 700 lines of tests.
+≈ 8 100 lines in `src/`, `cli/`, `electron/`; ≈ 3 400 lines of tests.
 
 ## Where to look
-README.md (run it) · ARCHITECTURE.md · DECISIONS.md · FEATURE-MATRIX.md · KNOWN-ISSUES.md · NEXT-TASKS.md · HANDOVER.md
+README.md · ARCHITECTURE.md · DECISIONS.md · FEATURE-MATRIX.md · ROADMAP.md · KNOWN-ISSUES.md · NEXT-TASKS.md · HANDOVER.md · docs/AUTOMATION.md · docs/WINDOWS-RELEASE.md

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.0 – Phase 2–6 work (unreleased)
+### Added
+* **Compound paths** (file format v2, v1 migrated on load), fill rules, make/release.
+* **Boolean operations** (Paper.js): unite, minus front, intersect, exclude.
+* **Clipping masks**, **gradients** (linear/radial, stops, alpha; SVG import/export, PDF shadings), **align/distribute**, **rulers, guides and snapping**, **isolation mode**.
+* **Typography**: HarfBuzz shaping, bundled Inter + system fonts (Electron scan / Local Font Access), Type tool, Typography panel, area text, tracking/leading/alignment, RTL runs, fallback fonts, text on path, Create Outlines.
+* **Export**: JPEG, PDF (vector, multi-page, TrimBox/BleedBox), bleed, ppi metadata in PNG/JPEG, presets (print-on-demand T-shirt, web, JPEG, PDF, SVG), all-artboards export, pre-flight checks.
+* **Print-on-demand tools**: templates with guides (T-shirt 4500×5400 @ 300 ppi etc.), vector clean-up, colour reduction/replacement, batch resize & export, image tracing.
+* **Automation**: JSON action lists, headless batch CLI (`npm run build:cli`), plugin API with one bundled plugin.
+* Electron: `app://vs/` protocol (WASM fetch), system font scan, batch save to a folder, binary open.
+* Tests: 210 unit/interaction, 37 browser end-to-end (including SVG interop against Chromium), PDF checks with poppler, Electron and CLI smoke tests.
+### Fixed during development (regression tests added)
+* Layers drag-and-drop disabled for top-level rows; drop landed one slot off.
+* Dialog Escape handling; file-chooser "cancel" race on open.
+* Group/ungroup, duplicate and alt-drag crashes when working on immer drafts.
+* SVG `style="opacity"` ignored.
+
 ## 0.1.0 – Phase 0 + Phase 1 (unreleased)
 ### Added
 * Document core: scene graph (artboards, layers, groups, rect/ellipse/path), immutable updates, snapshot undo/redo with gesture transactions, versioned `.vstudio` format with strict validation.

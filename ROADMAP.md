@@ -1,16 +1,14 @@
 # Roadmap
 
-Status as of this milestone: **Phase 0 complete, Phase 1 complete** (with the limitations in KNOWN-ISSUES.md). Nothing after Phase 1 is started.
-
-| Phase | Goal | Exit criteria |
+| Phase | Goal | Status |
 |---|---|---|
-| 0 ✅ | Architecture, stack validated by prototype | Docs in repo; core/render/editor/UI built and tested |
-| 1 ✅ | Working vector editor | Every Phase-1 item in FEATURE-MATRIX is ✅ with tests; save→reopen lossless |
-| 2 | Advanced vector | Compound paths (first), booleans via vetted lib + edge-case corpus, clipping masks, gradients, align/distribute, guides/snapping/rulers, isolation mode, appearance panel, multi-artboard tools |
-| 3 | Typography | HarfBuzz shaping, font discovery, editable text kept in native file, on-path text, outline conversion, multilingual/fallback tests |
-| 4 | Professional export | JPEG, PDF (+EPS if practical), per-artboard & batch export, presets, bleed/trim, ICC where supported; measured colour checks |
-| 5 | Creative tools | Trace, brushes, symbols, patterns, non-destructive effects |
-| 6 | Automation | Action/batch runner on the DOM-free command layer, scripting, plugin API, large-doc optimisation |
-| 7 | Stability | Regression suite, interop corpus, **Windows** release candidate (not published without owner approval) |
+| 0 | Architecture, stack validated by prototype | ✅ done |
+| 1 | Working vector editor | ✅ done |
+| 2 | Advanced vector | 🟡 compound paths, booleans, clipping masks, gradients, align/distribute, guides/snapping/rulers, isolation, multi-artboard done. **Missing:** appearance panel, stroke expansion/offset, grid, anchor snapping |
+| 3 | Typography | 🟡 engine complete (HarfBuzz); editing UX is panel-based. **Missing:** on-canvas editing, per-character styles, manual kerning, justify, paragraph spacing |
+| 4 | Professional export | 🟡 PNG/JPEG/SVG/PDF, bleed, ppi, presets, batch. **Missing:** EPS, ICC/CMYK, spot colours, crop marks, PDF text embedding |
+| 5 | Creative tools | 🟡 image tracing only. **Missing:** brushes, symbols, patterns, live effects, perspective |
+| 6 | Automation | 🟡 actions, batch CLI, plugin API done. **Missing:** sandboxed third-party scripting, large-document optimisation (virtualised panels, finer subscriptions) |
+| 7 | Stability | 🟡 test suites + interop checks exist. **Missing:** Windows verification and release candidate (not publishable without owner approval) |
 
-Ordering rationale: compound paths and booleans unblock real logo work and SVG fidelity; text is the largest risk so it follows once the geometry core is robust; export formats depend on text and gradients being final.
+Ordering rationale for what is left: Windows verification first (every claim is currently Linux-only), then colour management (print accuracy), then on-canvas text editing, then the remaining Phase 2/5 features.

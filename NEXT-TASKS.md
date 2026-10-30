@@ -1,13 +1,12 @@
 # Next tasks (priority order)
 
-1. **Windows verification** – run the Electron smoke test and the Playwright suite on a Windows 10/11 machine/runner; fix path/DPI/font issues. Package with electron-builder (local only, no publishing).
-2. **Compound paths** – model change (`subpaths[]` per path element, even-odd/non-zero fill rule), renderer, hit-test, direct-selection, SVG import/export, schema version 2 + migration from v1. Un-split SVG import.
-3. **Boolean operations** – evaluate Paper.js vs a Clipper-based WASM lib against an edge-case corpus (tangent, coincident edges, self-intersection, tiny gaps); implement union/subtract/intersect/exclude with undo.
-4. **Rulers, guides, grid, snapping** (snap to guides, artboard edges, anchors) + align/distribute panel.
-5. **Gradients** (linear/radial) in model, renderer, SVG import/export, Color panel.
-6. **Isolation mode** (double-click group) and **appearance panel** (multiple fills/strokes).
-7. Pen tool: continue open path, add/delete anchor under cursor, corner-radius UI for rectangles, curve re-fit on anchor delete.
-8. Fix rotated-object scaling (oriented selection box) and add "scale strokes" option.
-9. Autosave + crash recovery file; recent files.
-10. Panel docking; finer-grained UI subscriptions; virtualised layers list.
-11. Phase 3 typography (HarfBuzz) once 2–5 are stable.
+1. **Windows verification** (`docs/WINDOWS-RELEASE.md`): run all suites, fix path/font/DPI issues, then package locally (no publishing).
+2. **Colour management**: LittleCMS (WASM) for ICC conversion, CMYK/spot colours in the model, PDF/X-style output with output intent; measure ΔE against reference swatches before claiming anything.
+3. **On-canvas text editing** (caret, selection, IME), per-character styles, justify/paragraph spacing, manual kerning; system-font coverage detection instead of the fallback preference list.
+4. **Appearance panel** (multiple fills/strokes/effects), **stroke expansion / offset path**, grid + anchor snapping, units (mm/in/pt).
+5. Pen tool: continue open path, add/delete anchor under the cursor, corner-radius control, curve re-fit on anchor delete; direct-select all subpaths of compound paths.
+6. Fix rotated-object scaling (oriented selection box) and add a "scale strokes" option.
+7. Autosave + crash recovery; recent files; panel docking; virtualised layers list and finer-grained UI subscriptions.
+8. Export: EPS, PDF compression + proper transparency groups, crop marks, PNG colour profile, SVG `<text>` option.
+9. Creative: symbols, patterns, brushes, live effects, perspective.
+10. Plugin sandbox (worker/iframe + message passing) so user scripts can be allowed safely.

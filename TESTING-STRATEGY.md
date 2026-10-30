@@ -1,20 +1,22 @@
 # Testing strategy
 
 ## Layers
-1. **Unit (Vitest, Node)** – geometry math, document ops, history, schema validation, SVG parse/emit, renderer pixels, editor interactions, performance budgets. `npm test` (≈3 s).
-2. **Renderer pixel tests (Node)** – `@napi-rs/canvas` renders documents; PNG decoded with `pngjs`; exact pixel/alpha assertions for edges, transparency, clipping, group opacity, 4500×5400 export.
-3. **Editor interaction tests (Node, no DOM)** – drive tools with `pointerDown/Move/Up`, assert exact geometry and undo behavior.
-4. **End-to-end (Playwright + real Chromium)** – real mouse/keyboard, menus, panels, real file download/upload, real PNG/SVG files read back from disk. `npm run test:e2e`.
-5. **Electron smoke** – real Electron main/preload under Xvfb: launch, draw, native save (dialog mocked), verify file. `xvfb-run -a npm run test:electron`. **Linux only so far.**
+1. **Unit / interaction (Vitest, Node)** – geometry, document ops, history, schema + migration, SVG parse/emit, text layout, booleans, cleanup, automation, renderer pixels, editor tools via simulated pointer events, performance budgets. `npm test` (≈ 6 s).
+2. **Renderer pixel tests** – `@napi-rs/canvas` renders documents; exact pixel/alpha assertions (edges, transparency, clipping, gradients, group opacity, 4500×5400).
+3. **PDF verification** – our PDF is rasterised with poppler (`pdftoppm`) and compared with our canvas renderer; `pdfinfo` checks page/Trim/Bleed boxes.
+4. **End-to-end (Playwright + real Chromium)** – real mouse/keyboard, menus, panels, dialogs, real file download/upload, real PNG/JPEG/PDF/SVG files read back. Includes an **SVG interop test**: Chromium's own SVG engine draws our exported SVG and is compared pixel-wise with our renderer. `npm run test:e2e`.
+5. **Electron smoke** – real Electron under Xvfb: launch, draw, text via HarfBuzz WASM over `app://`, system-font scan, native save (dialog mocked). `xvfb-run -a npm run test:electron`.
+6. **CLI smoke** – builds the CLI, batch-exports resized transparent PNGs with text. `npm run test:cli`.
 
-## What is covered (see FEATURE-MATRIX.md for per-feature status)
-Complex Beziers (loops, degenerates, exact bounds), malformed files (truncated JSON, wrong types, duplicate ids, future versions, bad SVG paths), undo/redo sequences (random 200-step property test, transactions, redo clearing, dirty flag, stack limit), large documents (20k elements; render/hit-test/serialize budgets), export correctness (exact pixel size, alpha, shape edges within the pointer-mapping tolerance).
+## Edge cases covered
+Complex Beziers (loops, degenerate), malformed `.vstudio` and SVG, duplicate ids, future versions, v1 migration, 200-step random undo/redo, 20k-element documents, boolean tangent/coincident/identical/disjoint/hole cases, hit-testing with transforms/holes/clips, RTL and fallback text, text on closed/open paths, export size limits, invalid batch input, path-traversal in font reads.
 
-## Not covered yet
-* Windows runs of anything (no Windows machine available in this environment).
-* Visual-regression screenshots of the full UI (baselines would be OS/font-specific; planned once the UI stabilises).
-* High-DPI/multi-monitor behavior is implemented (DPR-aware canvas, DPR-change listener) but only exercised at DPR 1.
-* Accessibility audit, IME/text input, touch/pen pressure.
+## Not covered
+* **Windows** – nothing has been run there.
+* Full-UI screenshot regression (baselines are OS/font specific).
+* High-DPI / multi-monitor at DPR ≠ 1.
+* Accessibility audit, IME input, touch/pen.
+* Native-speaker review of non-Latin text rendering.
 
 ## Rules
-A feature is "done" only with an automated test that fails if it breaks. Bugs found get a regression test first. Commit only with typecheck, lint, unit and e2e green.
+A feature is done only with an automated test that fails when it breaks. Bugs get a regression test first. Commit only with typecheck, lint, unit and e2e green; run Electron and CLI smoke tests when touching `electron/`, text, export or `cli/`.

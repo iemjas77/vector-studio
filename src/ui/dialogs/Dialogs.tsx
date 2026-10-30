@@ -126,6 +126,7 @@ export function ExportPngDialog() {
         {(raster || format === 'pdf') && (
           <div className="row"><span style={{ width: 70 }}>Bleed</span>{numberInput(bleed, setBleed, 'export-bleed', 50)}<span>units on every side{format === 'pdf' ? ' (PDF TrimBox marks the finished size)' : ' (crop to the artboard size at the printer)'}</span></div>
         )}
+        {!bleedOk && <div style={{ color: '#ff9a9a' }} data-testid="export-bleed-error">Bleed must be between 0 and 1000.</div>}
         {raster && <>
           <div className="row"><span style={{ width: 70 }}>Size</span>
             <select data-testid="export-mode" value={mode} onChange={(e) => setMode(e.target.value as 'scale' | 'width')}><option value="scale">Scale</option><option value="width">Width (px)</option></select>
@@ -173,7 +174,7 @@ export function AboutDialog() {
   const close = () => useUi.getState().openDialog(null);
   return (
     <Dialog title="About Vector Studio" onClose={close} testId="dialog-about">
-      <p>Vector Studio 0.1 (Phase 1). Offline-first vector editor. See KNOWN-ISSUES.md for current limitations.</p>
+      <p>Vector Studio 0.2. Offline-first vector editor. Verified on Linux only; Windows is untested. See KNOWN-ISSUES.md for current limitations.</p>
       <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={close}>Close</button></div>
     </Dialog>
   );
