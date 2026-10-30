@@ -1,4 +1,4 @@
-import { elementBounds, elementSubpaths, type Artboard, type Element, type SolidPaint, type Stroke, type VDocument, type GradientPaint, solidOf } from '../core/document';
+import { elementBounds, elementSubpaths, getElement, parentMatrix, type Artboard, type Element, type SolidPaint, type Stroke, type VDocument, type GradientPaint, solidOf } from '../core/document';
 import type { PathNode, Rect } from '../core/geometry/types';
 import { rectsIntersect, transformRect, unionRect, IDENTITY } from '../core/geometry/matrix';
 import { pathBounds } from '../core/geometry/path';
@@ -18,6 +18,8 @@ export interface RenderOptions {
   makeCanvas?: (w: number, h: number) => OffscreenLike;
   /** World-space rect that is visible; elements outside are skipped. */
   cull?: Rect;
+  /** Isolation mode: everything is drawn dimmed except this group, which is drawn normally on top. */
+  isolate?: string | null;
 }
 
 export const rgba = (p: SolidPaint): string => {
@@ -101,8 +103,8 @@ function needsCompositing(el: Element): boolean {
   return el.type === 'group' || (!!el.fill && !!el.stroke);
 }
 
-function drawElement(ctx: CanvasRenderingContext2D, el: Element, opts: RenderOptions, world: Matrix6): void {
-  if (!el.visible) return;
+function drawElement(ctx: CanvasRenderingContext2D, el: Element, opts: RenderOptions & { skipId?: string }, world: Matrix6): void {
+  if (!el.visible || el.id === opts.skipId) return;
   const m = multiply6(world, el.transform);
   if (opts.cull) {
     const b = cachedBounds(el);
@@ -186,6 +188,21 @@ export function renderView(ctx: CanvasRenderingContext2D, doc: VDocument, view: 
 
   for (const a of doc.artboards) {
     drawArtboardBackground(ctx, a, zoom, view.theme?.label ?? '#9a9a9a', a.id === view.activeArtboardId, view.showArtboardLabels !== false);
+  }
+  if (opts.isolate) {
+    const g = getElement(doc, opts.isolate);
+    if (g) {
+      ctx.save();
+      ctx.globalAlpha = 0.3;
+      drawLayers(ctx, doc, { ...opts, cull: visible, skipId: opts.isolate } as RenderOptions);
+      ctx.restore();
+      const pm = parentMatrix(doc, g.id);
+      ctx.save();
+      ctx.transform(pm[0], pm[1], pm[2], pm[3], pm[4], pm[5]);
+      drawElement(ctx, g, { ...opts, cull: undefined }, pm);
+      ctx.restore();
+      return;
+    }
   }
   drawLayers(ctx, doc, { ...opts, cull: visible });
 }

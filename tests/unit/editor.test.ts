@@ -558,3 +558,38 @@ describe('guides and snapping', () => {
     expect(() => parseDocument(JSON.stringify(bad))).toThrow(/Duplicate id/);
   });
 });
+
+describe('isolation mode', () => {
+  function grouped() {
+    const e = ed();
+    const a = createRect(100, 100, 100, 100), b = createRect(300, 100, 100, 100), other = createRect(100, 400, 50, 50);
+    e.apply('seed', (d) => { addElement(d, a); addElement(d, b); addElement(d, other); });
+    e.select([a.id, b.id]); e.group();
+    return { e, a, b, other, g: e.selection[0] };
+  }
+  it('double-click enters isolation; children become pickable and movable; outside objects are not', () => {
+    const { e, a, b, other, g } = grouped();
+    e.pointerDown(150, 150); e.pointerUp(150, 150);
+    expect(e.selection).toEqual([g]);
+    e.pointerDown(150, 150, { detail: 2 }); e.pointerUp(150, 150);
+    expect(e.isolation).toBe(g);
+    e.pointerDown(150, 150); e.pointerUp(150, 150);
+    expect(e.selection).toEqual([a.id]);
+    e.pointerDown(120, 420); e.pointerUp(120, 420); // an object outside the group
+    expect(e.selection).not.toContain(other.id);
+    drag(e, 350, 150, 350, 200);
+    expect(worldBounds(e.doc, b.id)).toMatchObject({ y: 150 });
+    expect(worldBounds(e.doc, a.id)).toMatchObject({ y: 100 });
+  });
+  it('double-click on empty space or deleting the group exits; select-all stays inside', () => {
+    const { e, g } = grouped();
+    e.enterIsolation(g);
+    e.selectAll();
+    expect(e.selection).toHaveLength(2);
+    e.pointerDown(700, 550, { detail: 2 }); e.pointerUp(700, 550);
+    expect(e.isolation).toBeNull();
+    e.enterIsolation(g);
+    e.select([g]); e.deleteSelection();
+    expect(e.isolation).toBeNull();
+  });
+});

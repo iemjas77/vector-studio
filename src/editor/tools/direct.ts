@@ -138,7 +138,7 @@ export function directTool(): Tool {
         return;
       }
       // 4. Whole object (deep)
-      const hit = hitTest(ed.doc, e.p, ed.hitTol(), true);
+      const hit = ed.isolation ? ed.hit(e.p) : hitTest(ed.doc, e.p, ed.hitTol(), true);
       if (hit) {
         if (e.shift) ed.toggleSelect(hit);
         else if (!ed.selection.includes(hit)) ed.select([hit]);

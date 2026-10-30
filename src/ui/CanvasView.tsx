@@ -53,7 +53,7 @@ export function CanvasView() {
         c.width = w; c.height = h;
         return { canvas: c, ctx: c.getContext('2d')! };
       };
-      renderView(ctx, ed.doc, { zoom: ed.viewport.zoom, panX: ed.viewport.panX, panY: ed.viewport.panY, width: ed.viewport.width, height: ed.viewport.height, dpr, activeArtboardId: ed.activeArtboardId }, { makeCanvas: off });
+      renderView(ctx, ed.doc, { zoom: ed.viewport.zoom, panX: ed.viewport.panX, panY: ed.viewport.panY, width: ed.viewport.width, height: ed.viewport.height, dpr, activeArtboardId: ed.activeArtboardId }, { makeCanvas: off, isolate: ed.isolation });
       if (ed.showRulers) drawGuides(ctx, ed.doc.guides ?? [], ed.snapLines, ed.viewport, dpr);
       else drawGuides(ctx, [], ed.snapLines, ed.viewport, dpr);
       drawOverlay(ctx, ed.getOverlay(), ed.viewport, dpr);

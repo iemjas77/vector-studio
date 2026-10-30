@@ -228,3 +228,33 @@ function insideCompound(polys: Vec[][], p: Vec, rule: 'nonzero' | 'evenodd'): bo
   for (const poly of polys) w += windingNumber(poly, p);
   return rule === 'evenodd' ? w % 2 !== 0 : w !== 0;
 }
+
+/** Topmost direct child of a group hit at a world point (used by isolation mode). */
+export function hitTestChildren(doc: VDocument, groupId: string, world: Vec, tol: number): string | null {
+  const g = getElement(doc, groupId);
+  if (!g || g.type !== 'group') return null;
+  const full = worldMatrix(doc, groupId);
+  const inv = invert(full);
+  if (!inv) return null;
+  const p = apply(inv, world);
+  const scale = Math.sqrt(Math.abs(full[0] * full[3] - full[1] * full[2])) || 1;
+  for (let i = g.children.length - 1; i >= 0; i--) {
+    const c = g.children[i];
+    if (!c.visible || c.locked) continue;
+    if (hitElement(c, p, tol / scale)) return c.id;
+  }
+  return null;
+}
+
+/** Direct children of a group whose world bounds intersect the rect. */
+export function childrenInRect(doc: VDocument, groupId: string, r: Rect): string[] {
+  const g = getElement(doc, groupId);
+  if (!g || g.type !== 'group') return [];
+  const out: string[] = [];
+  for (const c of g.children) {
+    if (!c.visible || c.locked) continue;
+    const b = worldBounds(doc, c.id);
+    if (b && b.x <= r.x + r.w && b.x + b.w >= r.x && b.y <= r.y + r.h && b.y + b.h >= r.y) out.push(c.id);
+  }
+  return out;
+}

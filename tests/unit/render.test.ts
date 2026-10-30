@@ -6,6 +6,7 @@ import {
 } from '../../src/core/document';
 import { node } from '../../src/core/geometry/path';
 import { translate } from '../../src/core/geometry/matrix';
+import { renderView } from '../../src/render/canvas2d';
 import { rasterizeArtboard, rasterSize, type CanvasFactory } from '../../src/render/export';
 
 beforeEach(() => { let i = 0; setIdGenerator(() => 'r' + ++i); });
@@ -170,5 +171,21 @@ describe('gradient rendering', () => {
     const { px } = render(doc, { transparent: true });
     expect(px(2, 50)[3]).toBeLessThan(12);
     expect(px(97, 50)[3]).toBeGreaterThan(240);
+  });
+});
+
+describe('isolation rendering', () => {
+  it('dims everything outside the isolated group and draws the group normally', () => {
+    const doc = createDocument('d', 200, 100);
+    const a = createRect(0, 0, 50, 50, { fill: solid('#000000'), stroke: null }), b = createRect(100, 0, 50, 50, { fill: solid('#000000'), stroke: null });
+    addElement(doc, a); addElement(doc, b);
+    const canvas = createCanvas(200, 100);
+    const ctx = canvas.getContext('2d') as unknown as CanvasRenderingContext2D;
+    renderView(ctx, doc, { zoom: 1, panX: 0, panY: 0, width: 200, height: 100, dpr: 1, showArtboardLabels: false }, { isolate: b.id });
+    const d = (ctx as unknown as { getImageData(x: number, y: number, w: number, h: number): { data: Uint8ClampedArray } }).getImageData(0, 0, 200, 100).data;
+    const px = (x: number, y: number) => d[(200 * y + x) * 4]; // red channel over a white artboard
+    expect(px(120, 20)).toBe(0);                        // isolated: fully black
+    expect(px(20, 20)).toBeGreaterThan(150);            // dimmed (30 %) over white
+    expect(px(20, 20)).toBeLessThan(200);
   });
 });

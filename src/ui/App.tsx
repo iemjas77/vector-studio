@@ -69,7 +69,7 @@ export function App() {
       }
       if (ed.toolKey(e.key, mods)) { e.preventDefault(); return; }
       if (e.key === 'Delete' || e.key === 'Backspace') { ed.deleteSelection(); e.preventDefault(); return; }
-      if (e.key === 'Escape') { if (ed.dragging || ed.history.inTransaction) ed.cancelGesture(); else ed.clearSelection(); }
+      if (e.key === 'Escape') { if (ed.dragging || ed.history.inTransaction) ed.cancelGesture(); else if (ed.selection.length) ed.clearSelection(); else if (ed.isolation) ed.exitIsolation(); }
     };
     const up = (e: KeyboardEvent) => { if (e.code === 'Space') useUi.getState().setSpace(false); };
     window.addEventListener('keydown', down);

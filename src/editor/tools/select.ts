@@ -80,6 +80,10 @@ export function selectTool(): Tool {
         }
       }
       const hit = ed.hit(e.p, false);
+      if (e.detail >= 2) {
+        if (hit && getElement(ed.doc, hit)?.type === 'group') { ed.enterIsolation(hit); return; }
+        if (!hit && ed.isolation) { ed.exitIsolation(); return; }
+      }
       if (hit) {
         if (e.shift) {
           if (ed.selection.includes(hit)) { toggledOff = true; } else ed.select([...ed.selection, hit]);

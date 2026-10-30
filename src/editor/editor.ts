@@ -2,7 +2,7 @@ import {
   History, addElement, addArtboard, addLayer, convertToPath, createDocument, defaultStroke, duplicateElements, elementBounds, elementNodes,
   elementsInRect, getElement, groupElements, hitTest, insertCopies, locate, moveLayer, parentMatrix, patchArtboard, patchElements, patchLayer,
   removeArtboard, removeElements, removeLayer, reorder, selectionBounds, setPathNodes, solid, transformWorld, ungroupElements, worldMatrix,
-  allElementIds, moveElement, solidOf, addGuide, moveGuide, removeGuide, clearGuides, booleanOperation, makeCompoundPath, releaseCompoundPaths, type BooleanOp,
+  allElementIds, moveElement, solidOf, hitTestChildren, childrenInRect, addGuide, moveGuide, removeGuide, clearGuides, booleanOperation, makeCompoundPath, releaseCompoundPaths, type BooleanOp,
   alignElements, distributeElements, makeClippingMask, releaseClippingMask, type AlignMode, type DistributeMode,
   type Artboard, type Element, type Paint, type PathElement, type Stroke, type VDocument, type ZOrder,
 } from '../core/document';
@@ -52,6 +52,8 @@ export class Editor {
   rubber: Rect | null = null;
   penPreview: OverlayModel['pen'] = null;
   dragging = false;
+  /** Group being edited in isolation mode (only its children can be picked; the rest is dimmed). */
+  isolation: string | null = null;
   // Rulers, guides, snapping
   snapEnabled = true;
   showRulers = true;
@@ -87,6 +89,7 @@ export class Editor {
   private prune(): void {
     const doc = this.doc;
     const ids = new Set(allElementIds(doc));
+    if (this.isolation && !ids.has(this.isolation)) this.isolation = null;
     this.selection = this.selection.filter((id) => ids.has(id));
     for (const id of Object.keys(this.nodeSelection)) if (!ids.has(id) || !this.selection.includes(id)) delete this.nodeSelection[id];
     if (!doc.layers.some((l) => l.id === this.activeLayerId)) this.activeLayerId = doc.layers[doc.layers.length - 1].id;
@@ -108,6 +111,7 @@ export class Editor {
   // ---- document lifecycle ----
   loadDocument(doc: VDocument, fileName: string | null): void {
     this.cancelGesture();
+    this.isolation = null;
     this.history.reset(doc);
     this.selection = [];
     this.nodeSelection = {};
@@ -300,6 +304,11 @@ export class Editor {
   }
   clearSelection(): void { this.select([]); }
   selectAll(): void {
+    if (this.isolation) {
+      const g = getElement(this.doc, this.isolation);
+      this.select(g && g.type === 'group' ? g.children.filter((c) => c.visible && !c.locked).map((c) => c.id) : []);
+      return;
+    }
     const ids: string[] = [];
     for (const l of this.doc.layers) if (l.visible && !l.locked) for (const e of l.children) if (e.visible && !e.locked) ids.push(e.id);
     this.select(ids);
@@ -630,8 +639,25 @@ export class Editor {
   }
 
   /** Helpers used by tools / tests. */
-  hit(p: Vec, deep = false): string | null { return hitTest(this.doc, p, this.hitTol(), deep); }
-  inRect(r: Rect): string[] { return elementsInRect(this.doc, r); }
+  hit(p: Vec, deep = false): string | null {
+    return this.isolation ? hitTestChildren(this.doc, this.isolation, p, this.hitTol()) : hitTest(this.doc, p, this.hitTol(), deep);
+  }
+  inRect(r: Rect): string[] { return this.isolation ? childrenInRect(this.doc, this.isolation, r) : elementsInRect(this.doc, r); }
+
+  enterIsolation(groupId: string): void {
+    const g = getElement(this.doc, groupId);
+    if (!g || g.type !== 'group') return;
+    this.isolation = groupId;
+    this.select([]);
+    this.setStatus(`Isolation mode: ${g.name} (Esc or double-click empty space to exit)`);
+  }
+  exitIsolation(): void {
+    if (!this.isolation) return;
+    const id = this.isolation;
+    this.isolation = null;
+    this.select(getElement(this.doc, id) ? [id] : []);
+    this.setStatus('');
+  }
   boundsOf(id: string): Rect | null { const e = getElement(this.doc, id); return e ? elementBounds(e) : null; }
   pathOf(id: string): PathElement | null {
     const e = getElement(this.doc, id);
