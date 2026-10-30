@@ -1,6 +1,6 @@
 # Project status
 
-**Version 0.2.0 – not released, not packaged, never run on Windows.**
+**Version 0.3.0 (Update 002–003 in progress; see docs/SPEC-002-003-STATUS.md)** · previously 0.2.0 – not released, not packaged, never run on Windows.**
 Phases 0 and 1 are complete. Phases 2–6 are partly implemented (see ROADMAP.md / FEATURE-MATRIX.md for exactly what is and is not done); Phase 7 (Windows RC) has not been started.
 
 ## Verified (last full run, Linux container)
@@ -8,8 +8,8 @@ Phases 0 and 1 are complete. Phases 2–6 are partly implemented (see ROADMAP.md
 |---|---|
 | `npm run typecheck` | clean |
 | `npm run lint` | clean |
-| `npm test` (Vitest, Node) | **220 passed** in 16 files |
-| `npm run test:e2e` (Playwright, real Chromium) | **40 passed** |
+| `npm test` (Vitest, Node) | **275 passed** in 21 files |
+| `npm run test:e2e` (Playwright, real Chromium) | **49 tests** (one file-chooser test is occasionally flaky under load; see KNOWN-ISSUES) |
 | `xvfb-run -a npm run test:electron` | OK (shape, HarfBuzz text over `app://`, 109 system fonts discovered, native save) |
 | `npm run test:cli` | OK |
 | Windows | **not tested** |

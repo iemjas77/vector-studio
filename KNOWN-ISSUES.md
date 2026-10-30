@@ -49,3 +49,10 @@
 
 ## UI
 * Panels are fixed on the right (collapsible only), keyboard accessibility is partial, tool shortcuts assume English letters.
+
+## Update 002–003 additions
+* The browser file-chooser flow (open/import tests) can occasionally time out under heavy machine load (a `cancel` event can race the selected file); one run in ~10 showed it. Real use is unaffected, but the e2e suite may need a re-run.
+* Workspaces: panels can be shown, hidden, reordered with arrows and collapsed; they cannot float or be dragged. Toolbar groups are fixed.
+* Live effects: blur applies to the object only; shadows/glows are drawn behind it in stack order; there is no raster-effect expansion yet. PDF drops effects (warned).
+* Actions record semantic steps only; mouse selections are not recorded (use Select All / Select by type steps).
+* Action playback of export steps in the browser opens save dialogs/downloads; fully unattended runs use the batch dialog or the CLI.

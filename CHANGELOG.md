@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0 – Update 002–003 (in progress)
+### Added
+* **Actions**: record/pause/stop, play/step/pause/stop, edit/reorder/disable steps, shortcuts, import/export, persistence, undo of a run; **batch processing** dialog (files/folders, naming patterns, retries, per-file log) sharing the engine with the CLI.
+* **Tools**: Pencil (curve fitting), Line, Rounded Rectangle, Polygon, Star, Arc, Spiral, Eyedropper, Magic Wand, Lasso, Gradient, Artboard; grouped toolbar with flyouts and compact/expanded mode.
+* **Panels**: Pathfinder, Transform (+ Transform Each), Document Info, Appearance, Transparency, Actions.
+* **Appearance**: blend modes and live effects (blur, drop shadow, outer glow) with SVG filter export and export warnings.
+* **Shortcuts**: customisable keymap with presets, conflicts, import/export.
+* **Menus/workspaces**: Type, Select, Effect, Window menus; workspace presets, custom workspaces, panel show/hide/reorder, persistence.
+* Paste in Front/Back/on active artboard; rotate/shear/reflect/scale as recordable steps.
+### Fixed
+* Double-click never worked in the browser UI (pointer events report detail 0).
+
 ## 0.2.0 – Phase 2–6 work (unreleased)
 ### Added
 * **In-place text box** for editing text on the canvas.
