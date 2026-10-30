@@ -1,6 +1,7 @@
 import { apply, boundsOfPoints, invert, multiply, unionRect, IDENTITY } from '../geometry/matrix';
 import { elementSubpaths } from './shape';
 import { paintVisible } from './paint';
+import { layoutText } from '../text/layout';
 import { flattenPath, pathBounds, pointInPolygon, nearestOnPath, windingNumber } from '../geometry/path';
 import type { Matrix, Rect, Vec } from '../geometry/types';
 import type { Element, Layer, ShapeElement, VDocument } from './types';
@@ -67,6 +68,7 @@ export function localBounds(el: ShapeElement): Rect | null {
     case 'rect': return { x: el.x, y: el.y, w: el.w, h: el.h };
     case 'ellipse': return { x: el.cx - el.rx, y: el.cy - el.ry, w: el.rx * 2, h: el.ry * 2 };
     case 'path': return pathBounds(el.nodes, el.closed);
+    case 'text': return layoutText(el).box;
   }
 }
 
@@ -86,6 +88,11 @@ export function elementBounds(el: Element, withStroke = false): Rect | null {
   }
   const t = el.transform;
   let b: Rect | null = null;
+  if (el.type === 'text') {
+    const bx = layoutText(el).box;
+    b = transformBounds(t, bx);
+    return b;
+  }
   for (const sp of elementSubpaths(el)) {
     const moved = sp.nodes.map((n) => {
       const p = apply(t, n);
@@ -142,6 +149,10 @@ export function hitElement(el: Element, p: Vec, tol: number): boolean {
       return el.children.slice(0, -1).some((c) => hitElement(c, lp, ltol));
     }
     return el.children.some((c) => hitElement(c, lp, ltol));
+  }
+  if (el.type === 'text') {
+    const bx = layoutText(el).box;
+    return lp.x >= bx.x - ltol && lp.x <= bx.x + bx.w + ltol && lp.y >= bx.y - ltol && lp.y <= bx.y + bx.h + ltol;
   }
   const subs = elementSubpaths(el).filter((s) => s.nodes.length > 0);
   if (subs.length === 0) return false;

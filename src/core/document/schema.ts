@@ -43,6 +43,11 @@ const element: z.ZodType<Element> = z.lazy(() =>
     z.object({ ...baseShape, ...style, type: z.literal('rect'), x: num, y: num, w: num, h: num, rx: num.min(0) }),
     z.object({ ...baseShape, ...style, type: z.literal('ellipse'), cx: num, cy: num, rx: num.min(0), ry: num.min(0) }),
     z.object({ ...baseShape, ...style, type: z.literal('path'), nodes: z.array(pathNode), closed: z.boolean(), extra: z.array(subpath), fillRule: z.enum(['nonzero', 'evenodd']) }),
+    z.object({
+      ...baseShape, ...style, type: z.literal('text'), x: num, y: num, width: num.min(0), content: z.string().max(1_000_000), fontFamily: z.string().min(1),
+      fontSize: num.positive(), fontWeight: num.min(1).max(1000), italic: z.boolean(), tracking: num, lineHeight: num.positive(),
+      align: z.enum(['left', 'center', 'right']), path: subpath.nullable(), pathOffset: num,
+    }),
     z.object({ ...baseShape, type: z.literal('group'), children: z.array(element), clip: z.boolean().optional() }),
   ]),
 );

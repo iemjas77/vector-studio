@@ -4,7 +4,7 @@ import type { Editor } from '../../editor/editor';
 import { useApp } from '../hooks';
 
 const MAX_ROWS = 300;
-const TYPE_GLYPH: Record<Element['type'], string> = { rect: '▭', ellipse: '◯', path: '✎', group: '▣' };
+const TYPE_GLYPH: Record<Element['type'], string> = { rect: '▭', ellipse: '◯', path: '✎', group: '▣', text: 'T' };
 
 function EditableName({ value, onCommit, testId }: { value: string; onCommit(v: string): void; testId?: string }) {
   const [editing, setEditing] = useState(false);

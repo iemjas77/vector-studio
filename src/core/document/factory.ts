@@ -4,7 +4,7 @@ import { newId } from './ids';
 import {
   FORMAT_NAME, FORMAT_VERSION,
   type Artboard, type EllipseElement, type GroupElement, type Layer, type SolidPaint, type PathElement,
-  type RectElement, type Stroke, type VDocument, type Element,
+  type RectElement, type Stroke, type TextElement, type VDocument, type Element,
 } from './types';
 
 export const solid = (color: string, alpha = 1): SolidPaint => ({ type: 'solid', color, alpha });
@@ -25,6 +25,12 @@ export function createEllipse(cx: number, cy: number, rx: number, ry: number, in
 }
 export function createPath(nodes: PathNode[], closed: boolean, init: Partial<PathElement> = {}): PathElement {
   return { ...base('Path'), type: 'path', nodes, closed, extra: [], fillRule: 'nonzero', fill: closed ? solid('#d9d9d9') : null, stroke: defaultStroke(), ...init };
+}
+export function createText(x: number, y: number, content: string, init: Partial<TextElement> = {}): TextElement {
+  return {
+    ...base('Text'), type: 'text', x, y, width: 0, content, fontFamily: 'Inter', fontSize: 48, fontWeight: 400, italic: false, tracking: 0,
+    lineHeight: 1.2, align: 'left', path: null, pathOffset: 0, fill: solid('#000000'), stroke: null, ...init,
+  };
 }
 export function createGroup(children: Element[], init: Partial<GroupElement> = {}): GroupElement {
   return { ...base('Group'), type: 'group', children, ...init };

@@ -88,6 +88,34 @@ export interface PathElement extends BaseElement, ShapeStyle {
   extra: Subpath[];
   fillRule: FillRule;
 }
+export type TextAlign = 'left' | 'center' | 'right';
+/**
+ * Editable text. Shaped with HarfBuzz and drawn as outlines. (x, y) is the left end of the first baseline
+ * (point text) or the left edge of the box when `width` > 0 (area text, wraps at `width`).
+ */
+export interface TextElement extends BaseElement, ShapeStyle {
+  type: 'text';
+  x: number;
+  y: number;
+  /** 0 = point text (no wrapping). */
+  width: number;
+  content: string;
+  fontFamily: string;
+  fontSize: number;
+  /** 100..900 */
+  fontWeight: number;
+  italic: boolean;
+  /** Letter spacing in 1/1000 em. */
+  tracking: number;
+  /** Baseline-to-baseline distance as a multiple of the font size. */
+  lineHeight: number;
+  align: TextAlign;
+  /** Text on a path: the path (in the element's local space) the text follows, or null. */
+  path: Subpath | null;
+  /** Where the text starts along the path, 0..1 of its length. */
+  pathOffset: number;
+}
+
 export interface GroupElement extends BaseElement {
   type: 'group';
   children: Element[];
@@ -95,7 +123,7 @@ export interface GroupElement extends BaseElement {
   clip?: boolean;
 }
 
-export type ShapeElement = RectElement | EllipseElement | PathElement;
+export type ShapeElement = RectElement | EllipseElement | PathElement | TextElement;
 export type Element = ShapeElement | GroupElement;
 
 export interface Layer {

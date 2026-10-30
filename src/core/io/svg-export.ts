@@ -57,6 +57,11 @@ function elementSvg(el: Element): string {
       return `<rect${common(el)} x="${n(el.x)}" y="${n(el.y)}" width="${n(el.w)}" height="${n(el.h)}"${el.rx ? ` rx="${n(el.rx)}"` : ''}${paintAttrs('fill', el.fill)}${strokeAttrs(el.stroke)}/>`;
     case 'ellipse':
       return `<ellipse${common(el)} cx="${n(el.cx)}" cy="${n(el.cy)}" rx="${n(el.rx)}" ry="${n(el.ry)}"${paintAttrs('fill', el.fill)}${strokeAttrs(el.stroke)}/>`;
+    case 'text': {
+      // Text is exported as outlines so it looks identical everywhere (no font dependency); the text itself stays editable in .vstudio files.
+      const d = elementSubpaths(el).map((s) => nodesToSvgD(s.nodes, s.closed)).join('');
+      return `<path${common(el)} data-text="${esc(el.content.slice(0, 200))}" d="${d}"${paintAttrs('fill', el.fill)}${strokeAttrs(el.stroke)}/>`;
+    }
     case 'path':
       return `<path${common(el)} d="${elementSubpaths(el).map((s) => nodesToSvgD(s.nodes, s.closed)).join('')}"${el.fillRule === 'evenodd' ? ' fill-rule="evenodd"' : ''}${paintAttrs('fill', el.fill)}${strokeAttrs(el.stroke)}/>`;
   }
