@@ -1,4 +1,4 @@
-import { elementBounds, elementNodes, type Artboard, type Element, type Paint, type Stroke, type VDocument } from '../core/document';
+import { elementBounds, elementSubpaths, type Artboard, type Element, type Paint, type Stroke, type VDocument } from '../core/document';
 import type { PathNode, Rect } from '../core/geometry/types';
 import { rectsIntersect, transformRect, IDENTITY } from '../core/geometry/matrix';
 
@@ -58,10 +58,10 @@ function cachedBounds(el: Element): Rect | null {
 function drawShape(ctx: CanvasRenderingContext2D, el: Exclude<Element, { type: 'group' }>): void {
   ctx.beginPath();
   if (el.type === 'rect' && el.rx === 0) ctx.rect(el.x, el.y, el.w, el.h);
-  else tracePath(ctx, elementNodes(el), el.type !== 'path' || el.closed);
-  if (el.fill && (el.type !== 'path' || el.closed || el.nodes.length > 2)) {
+  else for (const sp of elementSubpaths(el)) tracePath(ctx, sp.nodes, sp.closed);
+  if (el.fill && (el.type !== 'path' || el.closed || el.nodes.length > 2 || el.extra.length > 0)) {
     ctx.fillStyle = rgba(el.fill);
-    ctx.fill('nonzero');
+    ctx.fill(el.type === 'path' ? el.fillRule : 'nonzero');
   }
   if (el.stroke && el.stroke.width > 0) {
     applyStroke(ctx, el.stroke);

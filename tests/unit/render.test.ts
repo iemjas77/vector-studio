@@ -130,3 +130,15 @@ describe('raster export correctness', () => {
     expect(px(195, 195)[3]).toBe(0);
   });
 });
+
+describe('compound path rendering', () => {
+  it('even-odd and non-zero holes are rendered as holes', () => {
+    const doc = createDocument('d', 100, 100);
+    const outer = [node(10, 10), node(90, 10), node(90, 90), node(10, 90)];
+    const hole = [node(30, 30), node(30, 70), node(70, 70), node(70, 30)];
+    addElement(doc, createPath(outer, true, { extra: [{ nodes: hole, closed: true }], fill: solid('#000000'), stroke: null }));
+    const { px } = render(doc, { transparent: true });
+    expect(px(20, 50)[3]).toBe(255);
+    expect(px(50, 50)[3]).toBe(0);
+  });
+});

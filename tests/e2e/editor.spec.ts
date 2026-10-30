@@ -361,3 +361,22 @@ test('print-on-demand template: 4500x5400 transparent PNG exports from the real 
   expect(px(2000, 2200)).toEqual([0, 112, 255, 255]);
   expect(px(4400, 5300)[3]).toBe(0);
 });
+
+test('Object menu: Unite and Minus Front work on overlapping shapes', async ({ page }) => {
+  await page.keyboard.press('m');
+  await dragDoc(page, 100, 100, 400, 400);
+  await dragDoc(page, 300, 300, 600, 600);
+  await page.keyboard.press('Control+a');
+  await page.getByRole('menubar').getByText('Object', { exact: true }).click();
+  await page.getByTestId('menu-object.subtract').click();
+  const els = await elements(page);
+  expect(els).toHaveLength(1);
+  expect(els[0].type).toBe('path');
+  // The subtracted corner is empty, the rest of the first square is still hit-testable.
+  await page.keyboard.press('Control+Shift+a');
+  await page.keyboard.press('v');
+  await clickDoc(page, 350, 350);
+  expect(await page.evaluate(() => (window as unknown as { __vs: { workspace: { current: { selection: string[] } } } }).__vs.workspace.current.selection.length)).toBe(0);
+  await clickDoc(page, 150, 150);
+  expect(await page.evaluate(() => (window as unknown as { __vs: { workspace: { current: { selection: string[] } } } }).__vs.workspace.current.selection.length)).toBe(1);
+});

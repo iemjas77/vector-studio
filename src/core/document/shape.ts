@@ -19,7 +19,7 @@ export function toPathElement(el: Element): PathElement | null {
   if (el.type === 'path') return el;
   return {
     id: el.id, name: el.name, visible: el.visible, locked: el.locked, opacity: el.opacity, transform: el.transform,
-    fill: el.fill, stroke: el.stroke, type: 'path', nodes: elementNodes(el).map((n) => ({ ...n })), closed: true,
+    fill: el.fill, stroke: el.stroke, type: 'path', nodes: elementNodes(el).map((n) => ({ ...n })), closed: true, extra: [], fillRule: 'nonzero',
   };
 }
 
@@ -29,4 +29,10 @@ export function cloneWithNewIds<T extends Element>(el: T): T {
   const walk = (e: Element) => { e.id = newId(); if (e.type === 'group') e.children.forEach(walk); };
   walk(copy);
   return copy;
+}
+
+/** All subpaths of a shape (rect/ellipse have one closed subpath). */
+export function elementSubpaths(el: RectElement | EllipseElement | PathElement): { nodes: PathNode[]; closed: boolean }[] {
+  if (el.type === 'path') return [{ nodes: el.nodes, closed: el.closed }, ...el.extra];
+  return [{ nodes: elementNodes(el), closed: true }];
 }

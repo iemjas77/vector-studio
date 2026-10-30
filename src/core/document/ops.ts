@@ -1,9 +1,9 @@
-import { multiply, invert } from '../geometry/matrix';
+import { apply, applyVector, multiply, invert } from '../geometry/matrix';
 import type { Matrix, PathNode } from '../geometry/types';
-import { createGroup, createLayer, createArtboard } from './factory';
+import { createArtboard, createGroup, createLayer, createPath } from './factory';
 import { locate, parentMatrix, worldMatrix } from './query';
-import { cloneWithNewIds, toPathElement } from './shape';
-import type { Artboard, Element, Layer, Paint, Stroke, VDocument } from './types';
+import { cloneWithNewIds, elementSubpaths, toPathElement } from './shape';
+import type { Artboard, Element, Layer, Paint, PathElement, ShapeElement, Stroke, VDocument } from './types';
 
 /**
  * Document commands. Every command mutates an immer draft; wrap with History.apply to
@@ -223,3 +223,63 @@ export function removeArtboard(doc: VDocument, id: string): void {
   doc.artboards = doc.artboards.filter((a) => a.id !== id);
 }
 
+
+// ---- compound paths ----
+
+function shapesIn(el: Element, out: ShapeElement[]): void {
+  if (el.type === 'group') el.children.forEach((c) => shapesIn(c, out)); else out.push(el);
+}
+
+/** Merge the selected objects into one compound path (even-odd, so overlaps become holes). Style from the front-most. */
+export function makeCompoundPath(doc: VDocument, ids: readonly string[]): string | null {
+  const locs = ids.map((id) => locate(doc, id)).filter((l): l is NonNullable<typeof l> => !!l);
+  if (locs.length < 2) return null;
+  const order = new Map<string, number>();
+  let n = 0;
+  const walk = (list: Element[]) => list.forEach((e) => { order.set(e.id, n++); if (e.type === 'group') walk(e.children); });
+  doc.layers.forEach((l) => walk(l.children));
+  locs.sort((a, b) => (order.get(a.element.id) ?? 0) - (order.get(b.element.id) ?? 0));
+  const subs: { nodes: PathNode[]; closed: boolean }[] = [];
+  let style: ShapeElement | null = null;
+  for (const l of locs) {
+    const shapes: ShapeElement[] = [];
+    shapesIn(l.element, shapes);
+    for (const s of shapes) {
+      const W = worldMatrix(doc, s.id);
+      for (const sp of elementSubpaths(s)) {
+        subs.push({
+          closed: sp.closed,
+          nodes: sp.nodes.map((nd) => {
+            const p = apply(W, nd), i = applyVector(W, { x: nd.inX, y: nd.inY }), o = applyVector(W, { x: nd.outX, y: nd.outY });
+            return { x: p.x, y: p.y, inX: i.x, inY: i.y, outX: o.x, outY: o.y };
+          }),
+        });
+      }
+      style = s;
+    }
+  }
+  if (!style || subs.length < 2) return null;
+  const st = style as ShapeElement;
+  const out = createPath(subs[0].nodes, subs[0].closed, { name: 'Compound path', fill: st.fill, stroke: st.stroke, opacity: st.opacity, extra: subs.slice(1), fillRule: 'evenodd' });
+  const target = locs[locs.length - 1];
+  const siblings = target.siblings;
+  const insertAt = target.index - locs.filter((l) => l.siblings === siblings && l.index < target.index).length;
+  for (const l of locs) l.siblings.splice(l.siblings.indexOf(l.element), 1);
+  siblings.splice(Math.max(0, insertAt), 0, out);
+  return out.id;
+}
+
+/** Split compound paths back into separate paths (same look and transform). Returns the new ids. */
+export function releaseCompoundPaths(doc: VDocument, ids: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const id of ids) {
+    const loc = locate(doc, id);
+    if (!loc || loc.element.type !== 'path' || loc.element.extra.length === 0) continue;
+    const p = loc.element as PathElement;
+    const parts = [{ nodes: p.nodes, closed: p.closed }, ...p.extra].map((s, i) =>
+      createPath(s.nodes.map((nd) => ({ ...nd })), s.closed, { name: `${p.name} ${i + 1}`, fill: p.fill, stroke: p.stroke, opacity: p.opacity, transform: [...p.transform] as Matrix }));
+    loc.siblings.splice(loc.index, 1, ...parts);
+    out.push(...parts.map((x) => x.id));
+  }
+  return out;
+}

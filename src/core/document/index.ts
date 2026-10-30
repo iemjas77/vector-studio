@@ -3,6 +3,7 @@ export * from './factory';
 export * from './query';
 export * from './shape';
 export * from './ops';
+export * from './boolean';
 export * from './history';
 export * from './schema';
 export * from './serialize';

@@ -311,3 +311,40 @@ describe('large documents', () => {
     expect((performance.now() - t1) / 20).toBeLessThan(100);
   });
 });
+
+describe('compound paths and format migration', () => {
+  const ring = () => {
+    const outer = [node(0, 0), node(100, 0), node(100, 100), node(0, 100)];
+    const hole = [node(25, 25), node(25, 75), node(75, 75), node(75, 25)]; // opposite winding
+    return createPath(outer, true, { extra: [{ nodes: hole, closed: true }], fillRule: 'nonzero', fill: solid('#000000'), stroke: null });
+  };
+  it('hit-testing respects the hole; evenodd also works for same-direction holes', () => {
+    const doc = createDocument();
+    const r = ring();
+    doc.layers[0].children.push(r);
+    expect(hitTest(doc, { x: 10, y: 50 }, 0)).toBe(r.id);
+    expect(hitTest(doc, { x: 50, y: 50 }, 0)).toBeNull();
+    r.extra[0].nodes.reverse();
+    expect(hitTest(doc, { x: 50, y: 50 }, 0)).toBe(r.id); // nonzero: same direction fills
+    r.fillRule = 'evenodd';
+    expect(hitTest(doc, { x: 50, y: 50 }, 0)).toBeNull();
+  });
+  it('bounds include every subpath and round trip through save', () => {
+    const doc = createDocument();
+    const p = createPath([node(0, 0), node(10, 0), node(10, 10)], true, { extra: [{ nodes: [node(50, 50), node(80, 50), node(80, 90)], closed: true }] });
+    doc.layers[0].children.push(p);
+    expect(elementBounds(p)).toMatchObject({ x: 0, y: 0, w: 80, h: 90 });
+    expect(parseDocument(serializeDocument(doc))).toEqual(doc);
+  });
+  it('migrates version 1 documents on load', () => {
+    const doc = createDocument();
+    doc.layers[0].children.push(createPath([node(0, 0), node(10, 0), node(10, 10)], true));
+    const v1 = JSON.parse(serializeDocument(doc));
+    v1.version = 1;
+    delete v1.layers[0].children[0].extra;
+    delete v1.layers[0].children[0].fillRule;
+    const back = parseDocument(JSON.stringify(v1));
+    expect(back.version).toBe(2);
+    expect(back.layers[0].children[0]).toMatchObject({ extra: [], fillRule: 'nonzero' });
+  });
+});

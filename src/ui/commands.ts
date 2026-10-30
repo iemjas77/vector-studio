@@ -162,6 +162,12 @@ export const COMMANDS: Command[] = [
   { id: 'object.forward', label: 'Bring Forward', shortcut: 'Ctrl+]', enabled: hasSel, run: (a) => a.ed.arrange('forward') },
   { id: 'object.backward', label: 'Send Backward', shortcut: 'Ctrl+[', enabled: hasSel, run: (a) => a.ed.arrange('backward') },
   { id: 'object.back', label: 'Send to Back', shortcut: 'Ctrl+Shift+[', enabled: hasSel, run: (a) => a.ed.arrange('back') },
+  { id: 'object.unite', label: 'Unite', enabled: (a) => a.ed.selection.length > 1, run: (a) => { a.ed.boolean('unite'); } },
+  { id: 'object.subtract', label: 'Minus Front', enabled: (a) => a.ed.selection.length > 1, run: (a) => { a.ed.boolean('subtract'); } },
+  { id: 'object.intersect', label: 'Intersect', enabled: (a) => a.ed.selection.length > 1, run: (a) => { a.ed.boolean('intersect'); } },
+  { id: 'object.exclude', label: 'Exclude Overlap', enabled: (a) => a.ed.selection.length > 1, run: (a) => { a.ed.boolean('exclude'); } },
+  { id: 'object.makeCompound', label: 'Make Compound Path', shortcut: 'Ctrl+8', enabled: (a) => a.ed.selection.length > 1, run: (a) => a.ed.makeCompound() },
+  { id: 'object.releaseCompound', label: 'Release Compound Path', shortcut: 'Ctrl+Alt+8', enabled: (a) => a.ed.selectedElements.some((e) => e.type === 'path' && e.extra.length > 0), run: (a) => a.ed.releaseCompound() },
   { id: 'object.toPath', label: 'Convert to Path', enabled: (a) => a.ed.selection.some((id) => { const t = getElement(a.ed.doc, id)?.type; return t === 'rect' || t === 'ellipse'; }), run: (a) => a.ed.convertSelectionToPaths() },
   { id: 'object.swap', label: 'Swap Fill and Stroke', shortcut: 'Shift+X', run: (a) => a.ed.swapFillStroke() },
 

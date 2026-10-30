@@ -48,6 +48,11 @@ export function flattenPath(nodes: readonly PathNode[], closed: boolean, toleran
 
 /** Nonzero winding point-in-polygon on a flattened path. */
 export function pointInPolygon(pts: readonly Vec[], p: Vec): boolean {
+  return windingNumber(pts, p) !== 0;
+}
+
+/** Signed winding number of a closed polygon around a point. */
+export function windingNumber(pts: readonly Vec[], p: Vec): number {
   let winding = 0;
   const n = pts.length;
   for (let i = 0; i < n; i++) {
@@ -57,7 +62,7 @@ export function pointInPolygon(pts: readonly Vec[], p: Vec): boolean {
       if (b.y > p.y && (b.x - a.x) * (p.y - a.y) - (p.x - a.x) * (b.y - a.y) > 0) winding++;
     } else if (b.y <= p.y && (b.x - a.x) * (p.y - a.y) - (p.x - a.x) * (b.y - a.y) < 0) winding--;
   }
-  return winding !== 0;
+  return winding;
 }
 
 export interface PathHit {

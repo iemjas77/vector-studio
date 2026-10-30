@@ -1,6 +1,6 @@
 import { apply, boundsOfPoints, invert, multiply, unionRect, IDENTITY } from '../geometry/matrix';
-import { elementNodes } from './shape';
-import { flattenPath, pathBounds, pointInPolygon, nearestOnPath } from '../geometry/path';
+import { elementSubpaths } from './shape';
+import { flattenPath, pathBounds, pointInPolygon, nearestOnPath, windingNumber } from '../geometry/path';
 import type { Matrix, Rect, Vec } from '../geometry/types';
 import type { Element, Layer, ShapeElement, VDocument } from './types';
 
@@ -82,16 +82,17 @@ export function elementBounds(el: Element, withStroke = false): Rect | null {
     }
     return r;
   }
-  const nodes = el.type === 'path' ? el.nodes : elementNodes(el);
-  const closed = el.type !== 'path' || el.closed;
   const t = el.transform;
-  const moved = nodes.map((n) => {
-    const p = apply(t, n);
-    const a = { x: t[0] * n.inX + t[2] * n.inY, y: t[1] * n.inX + t[3] * n.inY };
-    const b = { x: t[0] * n.outX + t[2] * n.outY, y: t[1] * n.outX + t[3] * n.outY };
-    return { x: p.x, y: p.y, inX: a.x, inY: a.y, outX: b.x, outY: b.y };
-  });
-  const b = pathBounds(moved, closed);
+  let b: Rect | null = null;
+  for (const sp of elementSubpaths(el)) {
+    const moved = sp.nodes.map((n) => {
+      const p = apply(t, n);
+      const a = { x: t[0] * n.inX + t[2] * n.inY, y: t[1] * n.inX + t[3] * n.inY };
+      const o = { x: t[0] * n.outX + t[2] * n.outY, y: t[1] * n.outX + t[3] * n.outY };
+      return { x: p.x, y: p.y, inX: a.x, inY: a.y, outX: o.x, outY: o.y };
+    });
+    b = unionRect(b, pathBounds(moved, sp.closed));
+  }
   if (!b) return null;
   if (withStroke && el.stroke && el.stroke.width > 0) {
     const sx = Math.hypot(t[0], t[1]);
@@ -133,10 +134,13 @@ export function hitElement(el: Element, p: Vec, tol: number): boolean {
   const scale = Math.sqrt(Math.abs(el.transform[0] * el.transform[3] - el.transform[1] * el.transform[2])) || 1;
   const ltol = tol / scale;
   if (el.type === 'group') return el.children.some((c) => hitElement(c, lp, ltol));
-  const nodes = el.type === 'path' ? el.nodes : elementNodes(el);
-  const closed = el.type !== 'path' || el.closed;
-  if (nodes.length === 0) return false;
-  if (el.fill && closed && el.fill.alpha > 0) {
+  const subs = elementSubpaths(el).filter((s) => s.nodes.length > 0);
+  if (subs.length === 0) return false;
+  if (el.fill && el.fill.alpha > 0 && el.type === 'path' && el.extra.length > 0) {
+    const polys = subs.map((s) => flattenPath(s.nodes, true, 0.1 / scale));
+    if (insideCompound(polys, lp, el.fillRule)) return true;
+  } else if (el.fill && el.fill.alpha > 0 && subs[0].closed) {
+    const nodes = subs[0].nodes;
     if (el.type === 'rect') {
       if (el.rx === 0) {
         if (lp.x >= el.x && lp.x <= el.x + el.w && lp.y >= el.y && lp.y <= el.y + el.h) return true;
@@ -149,8 +153,10 @@ export function hitElement(el: Element, p: Vec, tol: number): boolean {
   // Even with no stroke, allow a small tolerance on the outline so thin paths remain pickable.
   const reach = Math.max(strokeHalf, 0) + ltol;
   if (el.stroke || !el.fill) {
-    const hit = nearestOnPath(nodes, closed, lp);
-    if (hit && hit.dist <= reach) return true;
+    for (const s of subs) {
+      const hit = nearestOnPath(s.nodes, s.closed, lp);
+      if (hit && hit.dist <= reach) return true;
+    }
   }
   return false;
 }
@@ -206,4 +212,10 @@ export function allElementIds(doc: VDocument): string[] {
   const walk = (l: Element[]) => l.forEach((e) => { out.push(e.id); if (e.type === 'group') walk(e.children); });
   doc.layers.forEach((l) => walk(l.children));
   return out;
+}
+
+function insideCompound(polys: Vec[][], p: Vec, rule: 'nonzero' | 'evenodd'): boolean {
+  let w = 0;
+  for (const poly of polys) w += windingNumber(poly, p);
+  return rule === 'evenodd' ? w % 2 !== 0 : w !== 0;
 }

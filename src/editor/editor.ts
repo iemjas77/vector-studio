@@ -2,7 +2,7 @@ import {
   History, addElement, addArtboard, addLayer, convertToPath, createDocument, defaultStroke, duplicateElements, elementBounds, elementNodes,
   elementsInRect, getElement, groupElements, hitTest, insertCopies, locate, moveLayer, parentMatrix, patchArtboard, patchElements, patchLayer,
   removeArtboard, removeElements, removeLayer, reorder, selectionBounds, setPathNodes, solid, transformWorld, ungroupElements, worldMatrix,
-  allElementIds, moveElement,
+  allElementIds, moveElement, booleanOperation, makeCompoundPath, releaseCompoundPaths, type BooleanOp,
   type Artboard, type Element, type Paint, type PathElement, type Stroke, type VDocument, type ZOrder,
 } from '../core/document';
 import { apply, applyVector, translate } from '../core/geometry/matrix';
@@ -351,6 +351,30 @@ export class Editor {
   transformSelection(m: Matrix, label = 'Transform'): void {
     const ids = [...this.selection];
     if (ids.length) this.apply(label, (d) => transformWorld(d, ids, m));
+  }
+
+  /** Boolean operation on the selection. Returns false (with a status message) if nothing could be produced. */
+  boolean(op: BooleanOp): boolean {
+    if (this.selection.length < 2) return false;
+    const ids = [...this.selection];
+    let res: string | null = null;
+    this.apply(`Boolean: ${op}`, (d) => { res = booleanOperation(d, ids, op); });
+    if (!res) { this.setStatus('The result of that operation is empty, nothing changed'); return false; }
+    this.select([res]);
+    return true;
+  }
+  makeCompound(): void {
+    if (this.selection.length < 2) return;
+    const ids = [...this.selection];
+    let res: string | null = null;
+    this.apply('Make compound path', (d) => { res = makeCompoundPath(d, ids); });
+    if (res) this.select([res]);
+  }
+  releaseCompound(): void {
+    const ids = [...this.selection];
+    let out: string[] = [];
+    this.apply('Release compound path', (d) => { out = releaseCompoundPaths(d, ids); });
+    if (out.length) this.select(out);
   }
 
   convertSelectionToPaths(): void {

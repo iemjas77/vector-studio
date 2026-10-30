@@ -102,10 +102,9 @@ describe('svg import', () => {
     expect(worldBounds(doc, g.id)).toMatchObject({ x: 10, y: 10, w: 5, h: 5 });
   });
   it('reports unsupported features instead of silently dropping them', () => {
-    const { warnings } = importSvg(`<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><text>hi</text><image href="x.png"/><path d="M0 0L5 0L5 5Z" fill-rule="evenodd"/></svg>`);
+    const { warnings } = importSvg(`<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><text>hi</text><image href="x.png"/><path d="M0 0L5 0L5 5Z" /></svg>`);
     expect(warnings.join('|')).toMatch(/<text>/);
     expect(warnings.join('|')).toMatch(/<image>/);
-    expect(warnings.join('|')).toMatch(/evenodd/);
   });
   it('malformed path data skips only that path and warns', () => {
     const { doc, warnings } = importSvg(`<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><path d="M0 0 $$"/><rect width="5" height="5"/></svg>`);
@@ -118,11 +117,12 @@ describe('svg import', () => {
     expect(() => importSvg('<svg width="0" height="0"></svg>')).toThrow(/invalid size/);
     expect(() => importSvg('')).toThrow();
   });
-  it('splits compound paths with a warning and keeps every sub-path', () => {
-    const { doc, warnings } = importSvg(`<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><path d="M0 0H10V10Z M20 20H30V30Z"/></svg>`);
-    const g = doc.layers[0].children[0];
-    expect(g.type === 'group' && g.children.length).toBe(2);
-    expect(warnings.length).toBe(1);
+  it('keeps multi-subpath paths as one compound path with its fill rule', () => {
+    const { doc, warnings } = importSvg(`<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><path fill-rule="evenodd" d="M0 0H100V100H0Z M25 25H75V75H25Z"/></svg>`);
+    const p = doc.layers[0].children[0];
+    expect(p.type).toBe('path');
+    if (p.type === 'path') { expect(p.extra).toHaveLength(1); expect(p.fillRule).toBe('evenodd'); }
+    expect(warnings).toEqual([]);
   });
   it('uses the first gradient stop as a flat fallback with a warning', () => {
     const { doc, warnings } = importSvg(`<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><defs><linearGradient id="g"><stop offset="0" stop-color="#123456"/><stop offset="1" stop-color="#fff"/></linearGradient></defs><rect width="5" height="5" fill="url(#g)"/></svg>`);

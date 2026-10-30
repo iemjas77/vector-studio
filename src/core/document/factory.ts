@@ -24,7 +24,7 @@ export function createEllipse(cx: number, cy: number, rx: number, ry: number, in
   return { ...base('Ellipse'), type: 'ellipse', cx, cy, rx, ry, fill: solid('#d9d9d9'), stroke: null, ...init };
 }
 export function createPath(nodes: PathNode[], closed: boolean, init: Partial<PathElement> = {}): PathElement {
-  return { ...base('Path'), type: 'path', nodes, closed, fill: closed ? solid('#d9d9d9') : null, stroke: defaultStroke(), ...init };
+  return { ...base('Path'), type: 'path', nodes, closed, extra: [], fillRule: 'nonzero', fill: closed ? solid('#d9d9d9') : null, stroke: defaultStroke(), ...init };
 }
 export function createGroup(children: Element[], init: Partial<GroupElement> = {}): GroupElement {
   return { ...base('Group'), type: 'group', children, ...init };

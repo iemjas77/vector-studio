@@ -435,3 +435,43 @@ describe('save / reopen through the editor', () => {
     expect(e2.doc).toEqual(e.doc);
   });
 });
+
+describe('boolean and compound commands', () => {
+  it('unite via the editor is one undo step and selects the result; release splits it again', () => {
+    const e = ed();
+    const a = createRect(100, 100, 100, 100), b = createRect(150, 150, 100, 100);
+    e.apply('seed', (d) => { addElement(d, a); addElement(d, b); });
+    e.select([a.id, b.id]);
+    expect(e.boolean('unite')).toBe(true);
+    expect(els(e)).toHaveLength(1);
+    expect(e.selection).toHaveLength(1);
+    e.undo();
+    expect(els(e)).toHaveLength(2);
+    e.redo();
+    e.makeCompound(); // single object: no-op
+    expect(els(e)).toHaveLength(1);
+  });
+  it('make compound with a nested shape makes a hole; release restores two paths', () => {
+    const e = ed();
+    const a = createRect(100, 100, 200, 200), b = createRect(150, 150, 50, 50);
+    e.apply('seed', (d) => { addElement(d, a); addElement(d, b); });
+    e.select([a.id, b.id]);
+    e.makeCompound();
+    const c = els(e)[0];
+    expect(c.type === 'path' && c.extra.length).toBe(1);
+    expect(e.hit({ x: 170, y: 170 })).toBeNull(); // the hole
+    expect(e.hit({ x: 120, y: 120 })).toBe(c.id);
+    e.releaseCompound();
+    expect(els(e)).toHaveLength(2);
+  });
+  it('an empty result changes nothing and reports it', () => {
+    const e = ed();
+    const a = createRect(0, 0, 50, 50), b = createRect(200, 200, 50, 50);
+    e.apply('seed', (d) => { addElement(d, a); addElement(d, b); });
+    e.select([a.id, b.id]);
+    expect(e.boolean('intersect')).toBe(false);
+    expect(els(e)).toHaveLength(2);
+    expect(e.history.undoLabel).toBe('seed');
+    expect(e.status).toMatch(/empty/);
+  });
+});

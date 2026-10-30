@@ -165,8 +165,8 @@ class Importer {
       el.transform = common.transform;
       return el;
     };
-    if (st.evenodd && ['path', 'polygon', 'polyline', 'rect', 'circle', 'ellipse'].includes(tag)) {
-      this.warn('fill-rule="evenodd" is not supported yet; shapes are filled with nonzero winding');
+    if (st.evenodd && ['polygon', 'polyline', 'rect', 'circle', 'ellipse'].includes(tag)) {
+      this.warn('fill-rule="evenodd" only matters for paths; ignored on simple shapes');
     }
     const look = () => this.appearance(st);
     switch (tag) {
@@ -213,12 +213,9 @@ class Importer {
           return [];
         }
         const l = look();
-        const paths = subs.map((s) => createPath(s.nodes, s.closed, { fill: l.fill, stroke: l.stroke }));
-        if (paths.length === 0) return [];
-        if (paths.length === 1) return [named(paths[0], 'Path')];
-        this.warn('Paths with several sub-paths are split into separate paths (compound paths come in a later phase)');
-        paths.forEach((p, i) => (p.name = `Sub-path ${i + 1}`));
-        return [named(createGroup(paths), 'Compound path (split)')];
+        if (subs.length === 0) return [];
+        const [first, ...rest] = subs;
+        return [named(createPath(first.nodes, first.closed, { fill: l.fill, stroke: l.stroke, extra: rest, fillRule: st.evenodd ? 'evenodd' : 'nonzero' }), rest.length ? 'Compound path' : 'Path')];
       }
       case 'defs': case 'title': case 'desc': case 'metadata': case 'linearGradient': case 'radialGradient': case 'style': case 'clipPath': case 'mask':
         if (tag === 'style') this.warn('CSS <style> blocks are ignored');

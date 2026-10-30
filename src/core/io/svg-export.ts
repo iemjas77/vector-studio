@@ -1,6 +1,6 @@
 import { isIdentity } from '../geometry/matrix';
 import { nodesToSvgD } from '../geometry/path';
-import { elementNodes, type Element, type Paint, type Stroke, type VDocument, type Artboard } from '../document';
+import { elementSubpaths, type Element, type Paint, type Stroke, type VDocument, type Artboard } from '../document';
 
 const n = (v: number) => String(Math.round(v * 1e4) / 1e4);
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -40,7 +40,7 @@ function elementSvg(el: Element): string {
     case 'ellipse':
       return `<ellipse${common(el)} cx="${n(el.cx)}" cy="${n(el.cy)}" rx="${n(el.rx)}" ry="${n(el.ry)}"${paintAttrs('fill', el.fill)}${strokeAttrs(el.stroke)}/>`;
     case 'path':
-      return `<path${common(el)} d="${nodesToSvgD(elementNodes(el), el.closed)}"${paintAttrs('fill', el.fill)}${strokeAttrs(el.stroke)}/>`;
+      return `<path${common(el)} d="${elementSubpaths(el).map((s) => nodesToSvgD(s.nodes, s.closed)).join('')}"${el.fillRule === 'evenodd' ? ' fill-rule="evenodd"' : ''}${paintAttrs('fill', el.fill)}${strokeAttrs(el.stroke)}/>`;
   }
 }
 

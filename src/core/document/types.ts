@@ -1,7 +1,7 @@
 import type { Matrix, PathNode } from '../geometry/types';
 
 export const FORMAT_NAME = 'vector-studio';
-export const FORMAT_VERSION = 1;
+export const FORMAT_VERSION = 2;
 
 export interface SolidPaint {
   type: 'solid';
@@ -55,10 +55,18 @@ export interface EllipseElement extends BaseElement, ShapeStyle {
   rx: number;
   ry: number;
 }
+export type FillRule = 'nonzero' | 'evenodd';
+export interface Subpath {
+  nodes: PathNode[];
+  closed: boolean;
+}
+/** A path with one primary subpath (`nodes`/`closed`) plus optional extra subpaths (compound path, e.g. holes). */
 export interface PathElement extends BaseElement, ShapeStyle {
   type: 'path';
   nodes: PathNode[];
   closed: boolean;
+  extra: Subpath[];
+  fillRule: FillRule;
 }
 export interface GroupElement extends BaseElement {
   type: 'group';

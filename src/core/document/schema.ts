@@ -30,12 +30,13 @@ const baseShape = {
 };
 const style = { fill: paint.nullable(), stroke: stroke.nullable() };
 const pathNode = z.object({ x: num, y: num, inX: num, inY: num, outX: num, outY: num });
+const subpath = z.object({ nodes: z.array(pathNode), closed: z.boolean() });
 
 const element: z.ZodType<Element> = z.lazy(() =>
   z.discriminatedUnion('type', [
     z.object({ ...baseShape, ...style, type: z.literal('rect'), x: num, y: num, w: num, h: num, rx: num.min(0) }),
     z.object({ ...baseShape, ...style, type: z.literal('ellipse'), cx: num, cy: num, rx: num.min(0), ry: num.min(0) }),
-    z.object({ ...baseShape, ...style, type: z.literal('path'), nodes: z.array(pathNode), closed: z.boolean() }),
+    z.object({ ...baseShape, ...style, type: z.literal('path'), nodes: z.array(pathNode), closed: z.boolean(), extra: z.array(subpath), fillRule: z.enum(['nonzero', 'evenodd']) }),
     z.object({ ...baseShape, type: z.literal('group'), children: z.array(element) }),
   ]),
 );
@@ -60,6 +61,22 @@ function collectIds(els: Element[], seen: Set<string>): void {
   }
 }
 
+/** Upgrades older documents to the current version (in a copy). */
+function migrate(data: Record<string, unknown>): Record<string, unknown> {
+  if (data.version !== 1) return data;
+  const copy = structuredClone(data) as { version: number; layers?: { children?: unknown[] }[] };
+  const walk = (list: unknown[] | undefined) => {
+    for (const e of list ?? []) {
+      const el = e as { type?: string; children?: unknown[]; extra?: unknown; fillRule?: unknown };
+      if (el && el.type === 'path') { el.extra ??= []; el.fillRule ??= 'nonzero'; }
+      if (el && el.type === 'group') walk(el.children);
+    }
+  };
+  if (Array.isArray(copy.layers)) copy.layers.forEach((l) => walk(l?.children));
+  copy.version = 2;
+  return copy;
+}
+
 /** Validates arbitrary data as a VDocument. Throws DocumentFormatError with a readable message. */
 export function validateDocument(data: unknown): VDocument {
   if (typeof data !== 'object' || data === null) throw new DocumentFormatError('Not a Vector Studio document');
@@ -68,7 +85,7 @@ export function validateDocument(data: unknown): VDocument {
   if (typeof d.version !== 'number' || d.version > FORMAT_VERSION) {
     throw new DocumentFormatError(`Document version ${String(d.version)} is newer than this app supports (${FORMAT_VERSION})`);
   }
-  const res = documentSchema.safeParse(data);
+  const res = documentSchema.safeParse(migrate(data as Record<string, unknown>));
   if (!res.success) {
     const issue = res.error.issues[0];
     throw new DocumentFormatError(`Invalid document at "${issue.path.join('.')}": ${issue.message}`);
